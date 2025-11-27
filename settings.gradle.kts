@@ -27,7 +27,7 @@ dependencyResolutionManagement {
 
 include(":PobreFlix")
 include(":Streamberry")
-include(":NetCine")
+// include(":NetCine") //
 include(":TopFilmes")
 include(":Vizer")
 include(":StarckFilmes")
