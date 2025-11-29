@@ -26,10 +26,8 @@ jobs:
         # O comando 'publishToMavenLocal' e o 'build' garantem que tudo seja compilado
         run: ./gradlew assemble --refresh-dependencies --info
 
-      - name: Generate Repo JSON
-        # Este comando gera o repo.json com base nos seus modulos compilados
-        run: ./gradlew generateRepoJson
-
+      - name: Generate repository.json
+        run: ./gradlew generateRepositoryJson
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
