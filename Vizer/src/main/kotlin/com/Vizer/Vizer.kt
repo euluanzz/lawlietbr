@@ -10,7 +10,7 @@ class Vizer : MainAPI() {
     override var mainUrl = "https://vizer.tv"
     override var name = "Vizer"
     override val hasMainPage = true
-    override var lang = "pt"                    // ← var String (obrigatório agora)
+    override var lang = "pt-br"                    // ← var String (obrigatório agora)
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
