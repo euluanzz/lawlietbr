@@ -10,7 +10,7 @@ class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
     override var name = "UltraCine"
     override val hasMainPage = true
-    override var lang = "pt"           // pre-release atual exige String
+    override var lang = "pt-br"           // pre-release atual exige String
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
