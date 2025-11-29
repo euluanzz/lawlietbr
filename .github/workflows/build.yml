@@ -3,14 +3,14 @@ name: Build Cloudstream Providers
 on:
   push:
     branches:
-      - main # Garante que roda no push para o branch principal
-  workflow_dispatch: # Permite rodar manualmente
+      - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # ESSENCIAL: Concede permissão de escrita ao GITHUB_TOKEN para o deploy
+      contents: write # Permissão de escrita para o deploy
       
     steps:
       # 1. CHECKOUT
@@ -36,17 +36,18 @@ jobs:
       - name: Generate repository.json
         run: ./gradlew makePluginsJson
         
-      # 4. CRIAÇÃO DA ESTRUTURA FINAL (MOVER PARA BUILDS/)
-      - name: Mover e Renomear para Padrão de Repositório (builds/repo.json)
+      # 4. CRIAÇÃO DA ESTRUTURA FINAL (MOVER E COPIAR)
+      - name: Mover repo.json e Copiar .cs3 para pasta de deploy
         run: |
-          # 1. Cria a pasta 'builds' se ela ainda não existir
+          # 1. Cria a pasta 'builds'
           mkdir -p builds
-          # 2. Tenta mover o 'build/plugins.json' para 'builds/repo.json'
+          
+          # 2. Move o manifesto (Repo.json)
           mv build/plugins.json builds/repo.json || true
           
-          # 3. COPIA CORRIGIDA: Copia todos os .cs3 da pasta de libs para a pasta builds/
-          # O comando **cp **(copy) é mais direto e menos propenso a falhas de permissão que o find -exec cp.
-          cp **/build/libs/*.cs3 builds/ || true
+          # 3. COPIA DEFINITIVA DOS CS3: Usa o find de forma robusta.
+          # Procura em todo o diretório de trabalho pelo arquivo .cs3 (que o gradle coloca em **/build/libs)
+          find . -name "*.cs3" -print0 | xargs -0 cp -t builds/
           
       # 5. DEPLOY CRÍTICO - Publica o conteúdo da pasta 'builds/'
       - name: Deploy Providers to gh-pages branch
@@ -55,7 +56,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./builds
           publish_branch: gh-pages
-          commit_message: "Deploy: Automatic CloudStream Providers Update"
+          commit_message: "Deploy: Automatic CloudStream Providers Update (Final Attempt)"
 
       # 6. UPLOAD ARTIFACT (Opcional)
       - name: Upload Artifacts
