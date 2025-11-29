@@ -26,19 +26,12 @@ jobs:
         run: ./gradlew assemble --refresh-dependencies --info
 
       - name: Generate repository.json
-        run: ./gradlew makePluginsJson
-
-      - name: List files (debug – opcional, pode apagar depois)
-        run: |
-          echo "=== RAIZ DO PROJETO ==="
-          ls -la repo.json || true
-          echo "=== LIBS DOS PROVIDERS ==="
-          find . -name "*.cs3" -path "*/build/libs/*"
+        run: ./gradlew generateRepositoryJson
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: euluan-repo
           path: |
-            repo.json
+            repository.json
             **/build/libs/*.cs3
