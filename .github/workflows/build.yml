@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 1. CRÍTICO: Permissão de escrita para o deploy
+      contents: write # CRÍTICO: Permissão de escrita para o deploy
       
     steps:
       # 1. CHECKOUT
@@ -32,26 +32,39 @@ jobs:
       - name: Build with Gradle (Cria os .cs3)
         run: ./gradlew assemble --refresh-dependencies --info
 
-      # 3. CORREÇÃO: Força o Gradle a gerar o JSON no caminho esperado.
-      - name: Generate repository.json at correct path
+      # 3. GERAÇÃO DO MANIFESTO DE PROVEDORES
+      - name: Generate plugins.json at correct path
         run: ./gradlew makePluginsJson -PoutputFile="build/plugins.json"
 
-      # 4. CRIAÇÃO DA ESTRUTURA FINAL (MOVIMENTAÇÃO FIXA)
-      - name: Mover repo.json e Copiar .cs3 para pasta builds/
+      # 4. CRIAÇÃO DA ESTRUTURA FINAL (MANIFESTO DUPLO)
+      - name: Mover plugins.json e Criar repo.json principal
         run: |
+          # Define as variáveis de ambiente para a URL do repositório
+          REPO_URL="https://raw.githubusercontent.com/${{ github.repository }}/main/builds"
+          
           # 1. Cria a pasta 'builds'
           mkdir -p builds
           
-          # 2. Move o manifesto (Repo.json)
-          mv build/plugins.json builds/repo.json 
+          # 2. Move o manifesto de plugins para a pasta builds/ (mantendo o nome correto)
+          mv build/plugins.json builds/plugins.json 
           
-          # 3. COMANDO DE CÓPIA ROBUSTO para os .cs3: 
+          # 3. CRIA o manifesto principal (repo.json)
+          cat > builds/repo.json <<EOF
+{
+  "name": "CloudStream Brasil Repo",
+  "iconUrl": "https://raw.githubusercontent.com/${{ github.repository }}/main/builds/RepoIcon.png",
+  "description": "Repositório Brasileiro de Provedores CloudStream",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "$REPO_URL/plugins.json"
+  ]
+}
+EOF
+          # 4. COPIA os arquivos .cs3 e .jar (o Gradle gera ambos) para a pasta builds/
           find . -type f -name "*.cs3" -exec cp {} builds/ \; || true
+          find . -type f -name "*.jar" -exec cp {} builds/ \; || true
           
-      # 5. CORREÇÃO DE URL
-      - name: Corrigir URLs do JSON para Remover '/builds/'
-        run: |
-          sed -i 's/\/builds\//\//g' builds/repo.json
+      # 5. REMOVIDA A ETAPA SED: A estrutura do manifesto agora está correta.
 
       # 6. DEPLOY FINAL COM AÇÃO DE COMMIT DIRETO (Standard CloudStream)
       - name: Commit Providers to main branch
