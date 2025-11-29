@@ -27,7 +27,7 @@ jobs:
         run: ./gradlew assemble --refresh-dependencies --info
 
       - name: Generate repository.json
-        run: ./gradlew generateRepositoryJson
+      run: ./gradlew publishRepo
       
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
