@@ -43,20 +43,15 @@ jobs:
             const fs = require('fs');
             fs.writeFileSync('${{ github.workspace }}/euluan-repo.zip', Buffer.from(download.data));
             
-        # CORREÇÃO: O bloco 'env' (ambiente) deve estar aqui, no mesmo nível do 'uses' e 'with', 
-        # e não aninhado dentro do 'with'.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             
       - name: Extrair Artefatos
         run: |
-          # O unzip extrai para a pasta builds/
+          # O unzip extrai o conteúdo do builds/
           unzip euluan-repo.zip
 
-      - name: Configurar Git
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      # ETAPA 'Configurar Git' REMOVIDA. Ela não é necessária e estava causando o erro "fatal: not in a git directory".
           
       - name: Deploy para GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
