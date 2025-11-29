@@ -36,7 +36,7 @@ jobs:
       - name: Generate plugins.json at correct path
         run: ./gradlew makePluginsJson -PoutputFile="build/plugins.json"
 
-      # 4. CRIAÇÃO DA ESTRUTURA FINAL E CORREÇÃO DE URL (Ajuste para remover D.cs3)
+      # 4. CRIAÇÃO DA ESTRUTURA FINAL E CORREÇÃO DE URL (Ajuste para capturar nome completo)
       - name: Mover, Corrigir URLs Internas e Criar repo.json principal
         run: |
           # Define a base da URL funcional para o download no GitHub
@@ -53,12 +53,11 @@ jobs:
           REPO_BASE_URL_ESCAPED=$(echo $REPO_BASE_URL | sed 's/\//\\\//g')
           
           # 4. CRÍTICO: Substitui a URL do .cs3 no plugins.json
-          # O padrão foi alterado para \([a-zA-Z0-9]\{2,\}\) -> força a captura de pelo menos 2 caracteres.
-          sed -i -E 's|"url": "[^"]*([a-zA-Z0-9]{2,})\.cs3"|"url": "'"$REPO_BASE_URL_ESCAPED"'/\1.cs3"|g' builds/plugins.json
+          # O padrão foi ajustado para capturar O MAIOR NOME de arquivo ([a-zA-Z0-9]+).
+          sed -i -E 's|"url": "[^"]*([a-zA-Z0-9]+)\.cs3"|"url": "'"$REPO_BASE_URL_ESCAPED"'/\1.cs3"|g' builds/plugins.json
           
           # 5. CRÍTICO: Substitui a URL do .jar no plugins.json
-          # Repete o processo para o arquivo .jar (JarUrl).
-          sed -i -E 's|"jarUrl": "[^"]*([a-zA-Z0-9]{2,})\.jar"|"jarUrl": "'"$REPO_BASE_URL_ESCAPED"'/\1.jar"|g' builds/plugins.json
+          sed -i -E 's|"jarUrl": "[^"]*([a-zA-Z0-9]+)\.jar"|"jarUrl": "'"$REPO_BASE_URL_ESCAPED"'/\1.jar"|g' builds/plugins.json
 
           # 6. CRIA o manifesto principal (repo.json)
           echo "{
