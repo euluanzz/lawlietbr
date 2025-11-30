@@ -94,7 +94,7 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = rating?.times(10)?.roundToInt()
+                this.score = rating?.let { (it * 10).toInt() }
                 this.tags = genres
                 if (actors.isNotEmpty()) addActors(actors)
                 trailerUrl?.let { addTrailer(it) }
@@ -104,7 +104,7 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = rating?.times(10)?.roundToInt()
+                this.score = rating?.let { (it * 10).toInt() }
                 this.tags = genres
                 this.recommendations = null
                 this.duration = parseDuration(duration)
