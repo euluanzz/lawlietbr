@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.Actor
 import org.jsoup.nodes.Element
 import kotlin.math.roundToInt 
+import com.lagradost.cloudstream3.utils.toScore
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -119,7 +120,7 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = rating?.times(10)?.toInt()
+                this.score = rating?.times(10)?.toInt()?.toScore()
                 this.tags = genres
                 if (actors != null) addActors(actors)
                 addTrailer(trailerUrl)
@@ -129,7 +130,7 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = rating?.times(10)?.toInt()
+                this.score = rating?.times(10)?.toInt()?.toScore()
                 this.tags = genres
                 this.duration = parseDuration(duration)
                 if (actors != null) addActors(actors)
