@@ -6,9 +6,9 @@ import com.lagradost.cloudstream3.network.WebViewResolver
 import org.jsoup.nodes.Element
 
 class UltraCine : MainAPI() {
-    override val name = "UltraCine"
-    override val mainUrl = "https://ultracine.org"
-    override val lang = "pt-br"
+    override var name = "UltraCine"
+    override var mainUrl = "https://ultracine.org"
+    override var lang = "pt-br"
     override val hasMainPage = true
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
