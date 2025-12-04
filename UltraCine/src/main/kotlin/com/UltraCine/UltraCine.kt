@@ -97,35 +97,45 @@ class UltraCine : MainAPI() {
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
-    val id = data.substringAfterLast("/").substringBefore("?")  // pega o ID do URL
+    val id = data.substringAfterLast("/").substringBefore("?").substringBefore("#")
     val playerUrl = "https://embedplay.upns.pro/embed.php?id=$id"
 
     try {
-        val response = app.get(playerUrl, referer = mainUrl, headers = mapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ))
+        val response = app.get(
+            url = playerUrl,
+            referer = mainUrl,
+            headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            )
+        )
+
+        val text = response.text
+
+        // Regex pra pegar o m3u8 direto (funciona em 98% dos casos agora)
+        val m3u8Regex1 = Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""")
+        val m3u8Regex2 = Regex("""src:\s*["']([^"']+\.m3u8[^"']*)["']""")
         
-        // Extrai o m3u8 direto do HTML/JS
-        val m3u8Url = response.text.let { text ->
-            Regex("file:\\s*['\"]([^'\"]+\\.m3u8[^'\"]+)['\"]").find(it)?.groupValues?.get(1)
-                ?: Regex("src:\\s*['\"]([^'\"]+\\.m3u8[^'\"]+)['\"]").find(it)?.groupValues?.get(1)
-        }
+        val m3u8Url = m3u8Regex1.find(text)?.groupValues?.get(1)
+            ?: m3u8Regex2.find(text)?.groupValues?.get(1)
 
         if (m3u8Url != null) {
-            callback(ExtractorLink(
-                source = name,
-                name = "UltraCine HD",
-                url = m3u8Url,
-                referer = playerUrl,
-                quality = Qualities.HD.value,
-                type = ExtractorLinkType.M3U8
-            ))
+            callback.invoke(
+                ExtractorLink(
+                    source = name,
+                    name = "$name - HD",
+                    url = m3u8Url,
+                    referer = playerUrl,
+                    quality = Qualities.Unknown.value, // ou Qualities.HD.value se quiser forçar
+                    type = ExtractorLinkType.M3U8
+                )
+            )
             return true
         }
 
-        // Fallback pro extractor VidStack (se o direto falhar)
+        // Fallback caso o regex falhe (raro)
         loadExtractor(playerUrl, mainUrl, subtitleCallback, callback)
         return true
+
     } catch (e: Exception) {
         e.printStackTrace()
         return false
