@@ -82,5 +82,9 @@ class UltraCine : MainAPI() {
     } catch (e: Exception) {
         e.printStackTrace()
         return false
-    }
-}
+   
+      }
+ 
+   }
+
+ }
