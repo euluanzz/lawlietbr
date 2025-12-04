@@ -92,19 +92,42 @@ class UltraCine : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val id = if (data.startsWith("http")) {
-            data.substringAfterLast("/")
-        } else data
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    val id = data.substringAfterLast("/").substringBefore("?")  // pega o ID do URL
+    val playerUrl = "https://embedplay.upns.pro/embed.php?id=$id"
 
-        // Novo player direto (filmes e episódios)
-        loadExtractor("https://embedplay.upns.pro/embed.php?id=$id", mainUrl, subtitleCallback, callback)
-        loadExtractor("https://embedplay.upn.one/embed.php?id=$id", mainUrl, subtitleCallback, callback)
+    try {
+        val response = app.get(playerUrl, referer = mainUrl, headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ))
+        
+        // Extrai o m3u8 direto do HTML/JS
+        val m3u8Url = response.text.let { text ->
+            Regex("file:\\s*['\"]([^'\"]+\\.m3u8[^'\"]+)['\"]").find(it)?.groupValues?.get(1)
+                ?: Regex("src:\\s*['\"]([^'\"]+\\.m3u8[^'\"]+)['\"]").find(it)?.groupValues?.get(1)
+        }
 
+        if (m3u8Url != null) {
+            callback(ExtractorLink(
+                source = name,
+                name = "UltraCine HD",
+                url = m3u8Url,
+                referer = playerUrl,
+                quality = Qualities.HD.value,
+                type = ExtractorLinkType.M3U8
+            ))
+            return true
+        }
+
+        // Fallback pro extractor VidStack (se o direto falhar)
+        loadExtractor(playerUrl, mainUrl, subtitleCallback, callback)
         return true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return false
     }
 }
