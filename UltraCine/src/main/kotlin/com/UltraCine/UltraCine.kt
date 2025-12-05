@@ -177,6 +177,7 @@ class UltraCine : MainAPI() {
     }
 
     override suspend fun loadLinks(
+    // data pode ser: URL completa ou só o ID do episódio (ex: 281791)
     data: String,
     isCasting: Boolean,
     subtitleCallback: (SubtitleFile) -> Unit,
@@ -184,43 +185,16 @@ class UltraCine : MainAPI() {
 ): Boolean {
     if (data.isBlank()) return false
 
-    val url = if (data.matches(Regex("^\\d+$"))) {
-        "https://assistirseriesonline.icu/episodio/$data"
-    } else if (data.startsWith("http")) {
-        data
-    } else return false
-
     try {
-        val response = app.get(url, referer = "https://ultracine.org/")
-        val document = response.document
-        val text = response.text
-
-        // 1º TENTA PEGAR DO JAVASCRIPT (o que tá funcionando agora)
-        val playerRegex = Regex("""["']?(?:file|src|source|url)["']?\s*:\s*["'](https?://[^"']+embedplay[^"']+)""")
-        val match = playerRegex.find(text)
-        if (match != null) {
-            val link = match.groupValues[1]
-            loadExtractor(link, url, subtitleCallback, callback)
-            return true
+        // Caso 1: data é só número → é episódio do assistirseriesonline
+        if (data.matches(Regex("^\\d+$"))) {
+            val episodeUrl = "https://assistirseriesonline.icu/episodio/$data"
+            return loadFromEpisodePage(episodeUrl, subtitleCallback, callback)
         }
 
-        // 2º TENTA OS BOTÕES COM data-source
-        document.select("button[data-source]").forEach { btn ->
-            val link = btn.attr("data-source")
-            if (link.contains("embedplay") || link.contains("upn")) {
-                loadExtractor(link, url, subtitleCallback, callback)
-                return true
-            }
-        }
-
-        // 3º TENTA IFRAME DIRETO
-        document.select("iframe[src*='embedplay'], iframe[src*='upn'], iframe[src*='assistir']").forEach { iframe ->
-            var src = iframe.attr("src")
-            if (src.isBlank()) src = iframe.attr("data-src")
-            if (src.isNotBlank() && (src.contains("embedplay") || src.contains("upn"))) {
-                loadExtractor(src, url, subtitleCallback, callback)
-                return true
-            }
+        // Caso 2: data já é URL completa (filme ou página antiga)
+        if (data.startsWith("http")) {
+            return loadFromEpisodePage(data, subtitleCallback, callback)
         }
 
     } catch (e: Exception) {
@@ -230,6 +204,33 @@ class UltraCine : MainAPI() {
     return false
 }
 
+private suspend fun loadFromEpisodePage(
+    pageUrl: String,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    val response = app.get(pageUrl, referer = "https://ultracine.org/")
+    val text = response.text
+
+    // PEGA DIRETO DO JAVASCRIPT (método infalível 2025)
+    val regex = Regex("""["']?(?:file|src|source|url)["']?\s*:\s*["'](https?://[^"']+embedplay[^"']+)""")
+    regex.find(text)?.let {
+        val link = it.groupValues[1]
+        loadExtractor(link, pageUrl, subtitleCallback, callback)
+        return true
+    }
+
+    // Fallback: botão com data-source
+    response.document.select("button[data-source]").forEach { btn ->
+        val link = btn.attr("data-source")
+        if (link.contains("embedplay") || link.contains("upn")) {
+            loadExtractor(link, pageUrl, subtitleCallback, callback)
+            return true
+        }
+    }
+
+    return false
+}
     private fun parseDuration(duration: String?): Int? {
         if (duration == null) return null
         val regex = Regex("(\\d+)h\\s*(\\d+)m")
