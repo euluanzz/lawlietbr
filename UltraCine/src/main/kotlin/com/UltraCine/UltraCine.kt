@@ -42,13 +42,18 @@ class UltraCine : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
-        val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
-        val posterUrl = selectFirst("div.post-thumbnail figure img")?.let { img ->
+        val title = this.selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
+        val href = this.selectFirst("a.lnk-blk")?.attr("href") ?: return null
+
+        val posterUrl = this.selectFirst("div.post-thumbnail figure img")?.let { img ->
             val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
-            src?.let { if (it.startsWith("//")) "https:$it" else it }?.replace("/w500/", "/original/")
+            src?.let { url ->
+                val fullUrl = if (url.startsWith("//")) "https:$url" else url
+                fullUrl.replace("/w500/", "/original/")
+            }
         }
-        val year = selectFirst("span.year")?.text()?.toIntOrNull()
+
+        val year = this.selectFirst("span.year")?.text()?.toIntOrNull()
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = posterUrl
@@ -57,8 +62,8 @@ class UltraCine : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("\( mainUrl/?s= \){query.urlEncode()}").document
-        return document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
+        val searchResponse = app.get("\( mainUrl/?s= \){query.urlEncode()}").document
+        return searchResponse.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
             it.toSearchResult()
         }
     }
@@ -69,21 +74,28 @@ class UltraCine : MainAPI() {
         val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
         val poster = document.selectFirst("div.bghd img.TPostBg")?.let { img ->
             val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
-            src?.let { if (it.startsWith("//")) "https:$it" else it }?.replace("/w1280/", "/original/")
+            src?.let { url ->
+                val fullUrl = if (url.startsWith("//")) "https:$url" else url
+                fullUrl.replace("/w1280/", "/original/")
+            }
         }
-        val year = document.selectFirst("span.year")?.text()?.toIntOrNull()
-        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()
+        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.text()?.substringAfter("far\">")?.toIntOrNull()
+        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far\">")
         val plot = document.selectFirst("aside.fg1 div.description p")?.text()
-        val tags = document.select("aside.fg1 span.genres a").map { it.text() }
+        val genres = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
 
-        val actors = document.select("aside.fg1 ul.cast-lst a").map {
+        val actors = document.selectFirst("aside.fg1 ul.cast-lst p")?.select("a")?.map { 
             Actor(it.text(), it.attr("href"))
         }
 
-        val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.attr("src")
+        val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.let { iframe ->
+            iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
+        }
 
-        val iframeUrl = document.selectFirst("iframe[src*='assistirseriesonline'], iframe[data-src*='assistirseriesonline']")
-            ?.let { it.attr("src").takeIf { s -> s.isNotBlank() } ?: it.attr("data-src") }
+        val iframeElement = document.selectFirst("iframe[src*='assistirseriesonline']")
+        val iframeUrl = iframeElement?.let { iframe ->
+            iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
+        }
 
         val isSerie = url.contains("/serie/")
 
@@ -92,8 +104,8 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.tags = tags
-                if (actors.isNotEmpty()) addActors(actors)
+                this.tags = genres
+                if (actors != null) addActors(actors)
                 addTrailer(trailerUrl)
             }
         } else {
@@ -101,12 +113,45 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.tags = tags
+                this.tags = genres
                 this.duration = parseDuration(duration)
-                if (actors.isNotEmpty()) addActors(actors)
+                if (actors != null) addActors(actors)
                 addTrailer(trailerUrl)
             }
         }
+    }
+
+    private suspend fun parseSeriesEpisodes(iframeDocument: org.jsoup.nodes.Document, baseUrl: String): List<Episode> {
+        val episodes = mutableListOf<Episode>()
+        val seasons = iframeDocument.select("header.header ul.header-navigation li")
+
+        for (seasonElement in seasons) {
+            val seasonNumber = seasonElement.attr("data-season-number").toIntOrNull() ?: continue
+            val seasonId = seasonElement.attr("data-season-id")
+
+            val seasonEpisodes = iframeDocument.select("li[data-season-id='$seasonId']")
+                .mapNotNull { episodeElement ->
+                    val episodeId = episodeElement.attr("data-episode-id")
+                    val episodeTitle = episodeElement.selectFirst("a")?.text() ?: return@mapNotNull null
+
+                    val episodeNumber = episodeTitle.substringBefore(" - ").toIntOrNull() ?: 1
+                    val cleanTitle = if (episodeTitle.contains(" - ")) {
+                        episodeTitle.substringAfter(" - ")
+                    } else {
+                        episodeTitle
+                    }
+
+                    newEpisode(episodeId) {
+                        this.name = cleanTitle
+                        this.season = seasonNumber
+                        this.episode = episodeNumber
+                    }
+                }
+
+            episodes.addAll(seasonEpisodes)
+        }
+
+        return episodes
     }
 
     override suspend fun loadLinks(
@@ -124,30 +169,31 @@ class UltraCine : MainAPI() {
         }
 
         try {
-            val res = app.get(url, referer = mainUrl)
+            val res = app.get(url, referer = "https://ultracine.org/", timeout = 30)
             val html = res.text
 
-            val match = Regex("""["'](?:file|src|source)["']?\s*:\s*["'](https?://[^"']+embedplay[^"']+)""")
-                .find(html)
-
-            if (match == null) return false
+            // Regex que pega o link direto do player (funciona em filmes e episódios)
+            val regex = Regex("""["'](?:file|src|source)["']?\s*:\s*["'](https?://[^"']+embedplay[^"']+)""")
+            val match = regex.find(html) ?: return false
 
             var videoUrl = match.groupValues[1]
 
+            // Força o player oficial do UltraCine (melhor qualidade + tela cheia)
             if (videoUrl.contains("embedplay.upns.pro") || videoUrl.contains("embedplay.upn.one")) {
                 val id = videoUrl.substringAfterLast("/").substringBefore("?")
                 videoUrl = "https://player.ultracine.org/watch/$id"
             }
 
-            callback.invoke(
-                ExtractorLink(
-                    source = name,
-                    name = "$name • 4K Tela Cheia",
+            // VERSÃO FINAL DEZEMBRO 2025 - newExtractorLink é o novo padrão
+            callback(
+                newExtractorLink(
+                    source = "UltraCine",
+                    name = "UltraCine 4K • Tela Cheia",
                     url = videoUrl,
-                    referer = mainUrl,
-                    quality = Qualities.Unknown.value,
-                    isM3u8 = true
-                )
+                    referer = "https://ultracine.org/"
+                ).apply {
+                    this.isM3u8 = true
+                }
             )
 
             return true
@@ -159,8 +205,26 @@ class UltraCine : MainAPI() {
 
     private fun parseDuration(duration: String?): Int? {
         if (duration == null) return null
-        val hours = Regex("(\\d+)h").find(duration)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        val minutes = Regex("(\\d+)m").find(duration)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        return hours * 60 + minutes
+        val regex = Regex("(\\d+)h\\s*(\\d+)m")
+        val matchResult = regex.find(duration)
+        return if (matchResult != null) {
+            val hours = matchResult.groupValues[1].toIntOrNull() ?: 0
+            val minutes = matchResult.groupValues[2].toIntOrNull() ?: 0
+            hours * 60 + minutes
+        } else {
+            val minutesRegex = Regex("(\\d+)m")
+            val minutesMatch = minutesRegex.find(duration)
+            minutesMatch?.groupValues?.get(1)?.toIntOrNull()
+        }
+    }
+
+    private fun getQualityFromString(qualityStr: String?): Int {
+        return when {
+            qualityStr?.contains("4k", ignoreCase = true) == true -> Qualities.P2160.value
+            qualityStr?.contains("1080p", ignoreCase = true) == true -> Qualities.P1080.value
+            qualityStr?.contains("720p", ignoreCase = true) == true -> Qualities.P720.value
+            qualityStr?.contains("480p", ignoreCase = true) == true -> Qualities.P480.value
+            else -> Qualities.Unknown.value
+        }
     }
 }
