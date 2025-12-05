@@ -184,7 +184,6 @@ class UltraCine : MainAPI() {
 ): Boolean {
     if (data.isBlank()) return false
 
-    // Se for episódio (número), vai direto pro player
     val url = if (data.matches(Regex("^\\d+$"))) {
         "https://assistirseriesonline.icu/episodio/$data"
     } else if (data.startsWith("http")) {
@@ -192,36 +191,34 @@ class UltraCine : MainAPI() {
     } else return false
 
     try {
-        val doc = app.get(url).document
+        val response = app.get(url, referer = "https://ultracine.org/")
+        val document = response.document
+        val text = response.text
 
-        // NOVO: clica no botão "Assistir" que abre o player
-        val playButton = doc.selectFirst("button.play-btn, button.btn-play, a.play-btn") 
-            ?: doc.selectFirst("a[href*='assistir']")
-        
-        val playerUrl = if (playButton != null) {
-            val onclick = playButton.attr("onclick")
-            if (onclick.contains("location.href")) {
-                onclick.substringAfter("'").substringBefore("'")
-            } else {
-                playButton.attr("href").takeIf { it.isNotBlank() } ?: url
-            }
-        } else url
+        // 1º TENTA PEGAR DO JAVASCRIPT (o que tá funcionando agora)
+        val playerRegex = Regex("""["']?(?:file|src|source|url)["']?\s*:\s*["'](https?://[^"']+embedplay[^"']+)""")
+        val match = playerRegex.find(text)
+        if (match != null) {
+            val link = match.groupValues[1]
+            loadExtractor(link, url, subtitleCallback, callback)
+            return true
+        }
 
-        val playerDoc = app.get(playerUrl, referer = url).document
-
-        // Agora pega o player real (embedplay ou iframe direto)
-        playerDoc.selectFirst("button[data-source*='embedplay.upns.pro'], button[data-source*='embedplay.upn.one']")?.let {
-            val link = it.attr("data-source")
-            if (link.isNotBlank()) {
-                loadExtractor(link, playerUrl, subtitleCallback, callback)
+        // 2º TENTA OS BOTÕES COM data-source
+        document.select("button[data-source]").forEach { btn ->
+            val link = btn.attr("data-source")
+            if (link.contains("embedplay") || link.contains("upn")) {
+                loadExtractor(link, url, subtitleCallback, callback)
                 return true
             }
         }
 
-        playerDoc.selectFirst("div#player iframe, iframe[src*='embedplay'], iframe[src*='upn']")?.let {
-            val src = it.attr("src").takeIf { s -> s.isNotBlank() } ?: it.attr("data-src")
-            if (src.isNotBlank()) {
-                loadExtractor(src, playerUrl, subtitleCallback, callback)
+        // 3º TENTA IFRAME DIRETO
+        document.select("iframe[src*='embedplay'], iframe[src*='upn'], iframe[src*='assistir']").forEach { iframe ->
+            var src = iframe.attr("src")
+            if (src.isBlank()) src = iframe.attr("data-src")
+            if (src.isNotBlank() && (src.contains("embedplay") || src.contains("upn"))) {
+                loadExtractor(src, url, subtitleCallback, callback)
                 return true
             }
         }
