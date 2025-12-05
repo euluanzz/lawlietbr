@@ -11,3 +11,4 @@ class UltraCineProvider : BasePlugin() {
         registerExtractorAPI(EmbedPlayUpnOne())
     }
 }
+
