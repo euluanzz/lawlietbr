@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
+import com.lagradost.cloudstream3.extractors.ExtractorType
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -209,15 +210,18 @@ class UltraCine : MainAPI() {
             else -> videoUrl
         }
 
-        // CORREÇÃO FINAL: Sem source (fixo), usa type = LoadType.M3u8 no lugar de isM3u8
+        // CORREÇÃO FINAL 2025: Usa ExtractorType.M3u8 + params corretos (sem source)
         callback(
             newExtractorLink(
                 name = "UltraCine 4K • Tela Cheia",
                 url = videoUrl,
                 referer = "https://ultracine.org/",
                 quality = Qualities.Unknown.value,
-                type = LoadType.M3u8,  // ← PRA M3U8, É ISSO AQUI!
-                headers = mapOf("Origin" to "https://ultracine.org", "Referer" to "https://ultracine.org/")
+                type = ExtractorType.M3u8,  // ← CORRETO PRA M3U8!
+                headers = mapOf(
+                    "Origin" to "https://ultracine.org",
+                    "Referer" to "https://ultracine.org/"
+                )
             )
         )
 
