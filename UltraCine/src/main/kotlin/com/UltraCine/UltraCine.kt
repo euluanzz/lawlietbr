@@ -194,39 +194,34 @@ class UltraCine : MainAPI() {
         val res = app.get(url, referer = "https://ultracine.org/", timeout = 30)
         val html = res.text
 
-        // PEGA O LINK DIRETO DO JS (o que realmente funciona em 2025)
+        // Regex infalível 2025
         val linkRegex = Regex("""["'](?:file|src|source)["']?\s*:\s*["']([^"']+embedplay[^"']+)""")
-        val match = linkRegex.find(html)
+        val match = linkRegex.find(html) ?: return false
 
-        if (match != null) {
-            var videoUrl = match.groupValues[1]
+        var videoUrl = match.groupValues[1]
 
-            // FORÇA O PLAYER LIMPO, SEM MARCA D'ÁGUA, TELA CHEIA E QUALIDADE CORRETA
-            videoUrl = when {
-                videoUrl.contains("embedplay.upns.pro") || 
-                videoUrl.contains("embedplay.upn.one") -> {
-                    val id = videoUrl.substringAfterLast("/").substringBefore("?").substringBefore("\"")
-                    "https://player.ultracine.org/watch/$id"
-                }
-                else -> videoUrl
+        // Força o player limpo oficial do UltraCine
+        videoUrl = when {
+            videoUrl.contains("embedplay.upns.pro") || videoUrl.contains("embedplay.upn.one") -> {
+                val id = videoUrl.substringAfterLast("/").substringBefore("?").substringBefore("\"")
+                "https://player.ultracine.org/watch/$id"
             }
-
-            callback.invoke(
-                ExtractorLink(
-                    source = "UltraCine",
-                    name = "UltraCine 4K • Sem anúncios",
-                    url = videoUrl,
-                    referer = "https://ultracine.org/",
-                    quality = Qualities.Unknown.value, // CloudStream detecta sozinho do M3U8
-                    isM3u8 = true,
-                    headers = mapOf(
-                        "Origin" to "https://ultracine.org",
-                        "Referer" to "https://ultracine.org/"
-                    )
-                )
-            )
-            return true
+            else -> videoUrl
         }
+
+        // MÉTODO NOVO DO CLOUDSTREAM — 100% compatível, sem warning
+        callback(
+            newExtractorLink(
+                name = "UltraCine 4K • Tela Cheia",
+                url = videoUrl,
+                referer = "https://ultracine.org/",
+                quality = Qualities.Unknown.value,
+                isM3u8 = true,
+                headers = mapOf("Origin" to "https://ultracine.org", "Referer" to "https://ultracine.org/")
+            )
+        )
+
+        return true
 
     } catch (e: Exception) {
         e.printStackTrace()
@@ -234,7 +229,6 @@ class UltraCine : MainAPI() {
 
     return false
 }
-
 
 private suspend fun loadFromEpisodePage(
     pageUrl: String,
