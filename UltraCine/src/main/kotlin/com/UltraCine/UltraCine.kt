@@ -5,7 +5,8 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
-import com.lagradost.cloudstream3.mvvm.models.ExtractorType
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.models.ExtractorLink  // Se não tiver, adiciona pra segurança
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -177,7 +178,7 @@ class UltraCine : MainAPI() {
         return episodes
     }
 
-    override suspend fun loadLinks(
+   override suspend fun loadLinks(
     data: String,
     isCasting: Boolean,
     subtitleCallback: (SubtitleFile) -> Unit,
@@ -210,16 +211,16 @@ class UltraCine : MainAPI() {
             else -> videoUrl
         }
 
-        // Usa old constructor pra evitar headache com newExtractorLink 2025
+        // Constructor old, compatível e sem erros
         callback(
             ExtractorLink(
-                name = "UltraCine 4K • Tela Cheia",
                 source = "UltraCine",
+                name = "UltraCine 4K • Tela Cheia",
                 url = videoUrl,
-                quality = Qualities.Unknown.value,
                 referer = "https://ultracine.org/",
-                headers = mapOf("Origin" to "https://ultracine.org", "Referer" to "https://ultracine.org/"),
-                type = ExtractorType.M3u8
+                quality = Qualities.Unknown.value,
+                isM3u8 = true,  // Mantém compatível com players HLS
+                headers = mapOf("Origin" to "https://ultracine.org")
             )
         )
 
