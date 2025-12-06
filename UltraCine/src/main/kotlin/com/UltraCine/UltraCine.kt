@@ -229,4 +229,66 @@ class UltraCine : MainAPI() {
                 e.printStackTrace()
             }
                 
-        } else if
+        } else if (data.startsWith("http")) {
+            try {
+                val iframeDocument = app.get(data).document
+            
+                val embedPlayButton = iframeDocument.selectFirst("button[data-source*='embedplay.upns.pro']")
+                    ?: iframeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
+                
+                if (embedPlayButton != null) {
+                    val embedPlayLink = embedPlayButton.attr("data-source")
+                    
+                    if (embedPlayLink.isNotBlank()) {
+                        callback(
+                            newExtractorLink(
+                                source = "UltraCine",
+                                name = "UltraCine 4K • Tela Cheia",
+                                url = embedPlayLink,
+                                refererUrl = "https://ultracine.org/",
+                                isM3u8 = true
+                            )
+                        )
+                        return true
+                    }
+                }
+                
+                val singlePlayerIframe = iframeDocument.selectFirst("div.play-overlay div#player iframe")
+                if (singlePlayerIframe != null) {
+                    val singlePlayerSrc = singlePlayerIframe.attr("src")
+                    if (singlePlayerSrc.isNotBlank()) {
+                        callback(
+                            newExtractorLink(
+                                source = "UltraCine",
+                                name = "UltraCine 4K • Tela Cheia",
+                                url = singlePlayerSrc,
+                                refererUrl = "https://ultracine.org/",
+                                isM3u8 = true
+                            )
+                        )
+                        return true
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
+        return false
+    }
+
+    private fun parseDuration(duration: String?): Int? {
+        if (duration == null) return null
+        val regex = Regex("(\\d+)h\\s*(\\d+)m")
+        val matchResult = regex.find(duration)
+        return if (matchResult != null) {
+            val hours = matchResult.groupValues[1].toIntOrNull() ?: 0
+            val minutes = matchResult.groupValues[2].toIntOrNull() ?: 0
+            hours * 60 + minutes
+        } else {
+            val minutesRegex = Regex("(\\d+)m")
+            val minutesMatch = minutesRegex.find(duration)
+            minutesMatch?.groupValues?.get(1)?.toIntOrNull()
+        }
+    }
+}
