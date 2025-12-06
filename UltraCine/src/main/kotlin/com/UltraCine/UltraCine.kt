@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
+import com.lagradost.cloudstream3.network.WebViewResolver
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -12,10 +13,7 @@ class UltraCine : MainAPI() {
     override val hasMainPage = true
     override var lang = "pt-br"
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(
-        TvType.Movie,
-        TvType.TvSeries
-    )
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/category/lancamentos/" to "Lançamentos",
@@ -30,14 +28,15 @@ class UltraCine : MainAPI() {
         "$mainUrl/category/ficcao-cientifica/" to "Ficção Científica",
         "$mainUrl/category/guerra/" to "Guerra",
         "$mainUrl/category/kids/" to "Kids",
-        "$mainUrl/category/misterio/" to "Mistério",
+        "$mainUrl/category/misterio/" to "Misterio",
         "$mainUrl/category/romance/" to "Romance",
         "$mainUrl/category/terror/" to "Terror",
         "$mainUrl/category/thriller/" to "Thriller"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get(request.data + if (page > 1) "page/$page/" else "").document
+        val url = request.data + if (page > 1) "page/$page/" else ""
+        val document = app.get(url).document
         val home = document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
             it.toSearchResult()
         }
@@ -45,134 +44,124 @@ class UltraCine : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
-        val href = this.selectFirst("a.lnk-blk")?.attr("href") ?: return null
-        
-        val posterUrl = this.selectFirst("div.post-thumbnail figure img")?.let { img ->
-            val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
-            src?.let { url ->
-                val fullUrl = if (url.startsWith("//")) "https:$url" else url
-                fullUrl.replace("/w500/", "/original/")
-            }
-        }
-        
-        val year = this.selectFirst("span.year")?.text()?.toIntOrNull()
+        val title = selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
+        val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
+        val posterUrl = selectFirst("div.post-thumbnail figure img")?.attr("src")
+            ?.takeIf { it.isNotBlank() } ?: selectFirst("div.post-thumbnail figure img")?.attr("data-src")
+            ?.let { fixUrl(it).replace("/w500/", "/original/") }
+
+        val year = selectFirst("span.year")?.text()?.toIntOrNull()
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = posterUrl
             this.year = year
-            this.quality = getQualityFromString(this@toSearchResult.selectFirst("span.post-ql")?.text())
+            this.quality = getQualityFromString(selectFirst("span.post-ql")?.text())
         }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val searchResponse = app.get("$mainUrl/?s=$query").document
-        return searchResponse.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
+        val document = app.get("$mainUrl/?s=$query").document
+        return document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
             it.toSearchResult()
         }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
-        
+
         val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
-        val poster = document.selectFirst("div.bghd img.TPostBg")?.let { img ->
-            val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
-            src?.let { url ->
-                val fullUrl = if (url.startsWith("//")) "https:$url" else url
-                fullUrl.replace("/w1280/", "/original/")
-            }
-        }
-        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.text()?.substringAfter("far\">")?.toIntOrNull()
-        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far\">")
+        val poster = document.selectFirst("div.bghd img.TPostBg")?.attr("src")
+            ?.takeIf { it.isNotBlank() } ?: document.selectFirst("div.bghd img.TPostBg")?.attr("data-src")
+            ?.let { fixUrl(it).replace("/w1280/", "/original/") }
+
+        val yearText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.ownText()
+        val year = yearText?.toIntOrNull()
+
+        val durationText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.ownText()
         val rating = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull()
         val plot = document.selectFirst("aside.fg1 div.description p")?.text()
-        val genres = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
-        
-        val actors = document.selectFirst("aside.fg1 ul.cast-lst p")?.select("a")?.map { 
+        val tags = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
+
+        val actors = document.select("aside.fg1 ul.cast-lst p a").map {
             Actor(it.text(), it.attr("href"))
         }
-        
-        val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.let { iframe ->
-            iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
-        }
 
-        val iframeElement = document.selectFirst("iframe[src*='assistirseriesonline']")
-        val iframeUrl = iframeElement?.let { iframe ->
-            iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
-        }
+        val trailer = document.selectFirst("div.mdl-cn div.video iframe")?.attr("src")
+            ?.takeIf { it.isNotBlank() } ?: document.selectFirst("div.mdl-cn div.video iframe")?.attr("data-src")
+
+        val iframeUrl = document.selectFirst("iframe[src*='assistirseriesonline']")?.attr("src")
+            ?.takeIf { it.isNotBlank() } ?: document.selectFirst("iframe[src*='assistirseriesonline']")?.attr("data-src")
 
         val isSerie = url.contains("/serie/")
-        
+
         return if (isSerie) {
-            if (iframeUrl != null) {
-                val iframeDocument = app.get(iframeUrl).document
-                val episodes = parseSeriesEpisodes(iframeDocument, iframeUrl)
-                
-                newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) }
-                    this.tags = genres
-                    if (actors != null) addActors(actors)
-                    addTrailer(trailerUrl)
-                }
-            } else {
-                newTvSeriesLoadResponse(title, url, TvType.TvSeries, emptyList()) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) }
-                    this.tags = genres
-                    if (actors != null) addActors(actors)
-                    addTrailer(trailerUrl)
-                }
+            val episodes = if (iframeUrl != null) {
+                val iframeDoc = app.get(iframeUrl).document
+                parseSeriesEpisodes(iframeDoc)
+            } else emptyList()
+
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
+                this.year = year
+                this.plot = plot
+                this.tags = tags
+                this.recommendations = null
+                rating?.let { this.rating = (it * 1000).toInt() }  // novo jeito de definir rating
+                addActors(actors)
+                addTrailer(trailer)
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, iframeUrl ?: "") {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) }
-                this.tags = genres
-                this.duration = parseDuration(duration)
-                if (actors != null) addActors(actors)
-                addTrailer(trailerUrl)
+                this.tags = tags
+                this.duration = durationText?.let { parseDuration(it) }
+                rating?.let { this.rating = (it * 1000).toInt() }
+                addActors(actors)
+                addTrailer(trailer)
             }
         }
     }
 
-    private suspend fun parseSeriesEpisodes(iframeDocument: org.jsoup.nodes.Document, baseUrl: String): List<Episode> {
+    private fun parseSeriesEpisodes(doc: org.jsoup.nodes.Document): List<Episode> {
         val episodes = mutableListOf<Episode>()
-        val seasons = iframeDocument.select("header.header ul.header-navigation li")
-        
-        for (seasonElement in seasons) {
-            val seasonNumber = seasonElement.attr("data-season-number").toIntOrNull() ?: continue
-            val seasonId = seasonElement.attr("data-season-id")
-            
-            val seasonEpisodes = iframeDocument.select("li[data-season-id='$seasonId']")
-                .mapNotNull { episodeElement ->
-                    val episodeId = episodeElement.attr("data-episode-id")
-                    val episodeTitle = episodeElement.selectFirst("a")?.text() ?: return@mapNotNull null
-                    
-                    val episodeNumber = episodeTitle.substringBefore(" - ").toIntOrNull() ?: 1
-                    val cleanTitle = if (episodeTitle.contains(" - ")) {
-                        episodeTitle.substringAfter(" - ")
-                    } else {
-                        episodeTitle
-                    }
-                    
-                    newEpisode(episodeId) {
-                        this.name = cleanTitle
-                        this.season = seasonNumber
-                        this.episode = episodeNumber
-                    }
-            
-            episodes.addAll(seasonEpisodes)
+
+        doc.select("header.header ul.header-navigation li").forEach { seasonEl ->
+            val seasonNum = seasonEl.attr("data-season-number").toIntOrNull() ?: return@forEach
+            val seasonId = seasonEl.attr("data-season-id")
+
+            doc.select("li[data-season-id='$seasonId']").mapNotNull { epEl ->
+                val epId = epEl.attr("data-episode-id")
+                if (epId.isBlank()) return@mapNotNull null
+
+                val title = epEl.selectFirst("a")?.text() ?: "Episódio"
+                val epNum = title.substringBefore(" - ").toIntOrNull() ?: 1
+
+                Episode(
+                    data = epId,
+                    name = title.substringAfter(" - ").takeIf { it.isNotEmpty() } ?: title,
+                    season = seasonNum,
+                    episode = epNum
+                )
+            }.also { episodes.addAll(it) }
         }
-        
+
         return episodes
+    }
+
+    // Função auxiliar para converter duração (ex: "2h 15m" ou "135m") → minutos
+    private fun parseDuration(duration: String?): Int? {
+        if (duration.isNullOrBlank()) return null
+        val regex = Regex("""(\d+)h.*?(\d+)m""")
+        val match = regex.find(duration)
+        return if (match != null) {
+            val h = match.groupValues[1].toIntOrNull() ?: 0
+            val m = match.groupValues[2].toIntOrNull() ?: 0
+            h * 60 + m
+        } else {
+            Regex("""(\d+)m""").find(duration)?.groupValues?.get(1)?.toIntOrNull()
+        }
     }
 
     override suspend fun loadLinks(
@@ -182,81 +171,55 @@ class UltraCine : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         if (data.isBlank()) return false
-        
-        if (data.matches(Regex("\\d+"))) {
-            val episodeUrl = "https://assistirseriesonline.icu/episodio/$data"
-            
-            try {
-                val episodeDocument = app.get(episodeUrl).document
-            
-                val embedPlayButton = episodeDocument.selectFirst("button[data-source*='embedplay.upns.pro']") 
-                    ?: episodeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
-                
-                if (embedPlayButton != null) {
-                    val embedPlayLink = embedPlayButton.attr("data-source")
-                    
-                    if (embedPlayLink.isNotBlank()) {
-                        loadExtractor(embedPlayLink, episodeUrl, subtitleCallback, callback)
-                        return true
-                    }
-                }
-                
-                val singlePlayerIframe = episodeDocument.selectFirst("div.play-overlay div#player iframe")
-                if (singlePlayerIframe != null) {
-                    val singlePlayerSrc = singlePlayerIframe.attr("src")
-                    if (singlePlayerSrc.isNotBlank()) {
-                        loadExtractor(singlePlayerSrc, episodeUrl, subtitleCallback, callback)
-                        return true
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-                
-        } else if (data.startsWith("http")) {
-            try {
-                val iframeDocument = app.get(data).document
-            
-                val embedPlayButton = iframeDocument.selectFirst("button[data-source*='embedplay.upns.pro']")
-                    ?: iframeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
-                
-                if (embedPlayButton != null) {
-                    val embedPlayLink = embedPlayButton.attr("data-source")
-                    
-                    if (embedPlayLink.isNotBlank()) {
-                        loadExtractor(embedPlayLink, data, subtitleCallback, callback)
-                        return true
-                    }
-                }
-                
-                val singlePlayerIframe = iframeDocument.selectFirst("div.play-overlay div#player iframe")
-                if (singlePlayerIframe != null) {
-                    val singlePlayerSrc = singlePlayerIframe.attr("src")
-                    if (singlePlayerSrc.isNotBlank()) {
-                        loadExtractor(singlePlayerSrc, data, subtitleCallback, callback)
-                        return true
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        
-        return false
-    }
 
-    private fun parseDuration(duration: String?): Int? {
-        if (duration == null) return null
-        val regex = Regex("(\\d+)h\\s*(\\d+)m")
-        val matchResult = regex.find(duration)
-        return if (matchResult != null) {
-            val hours = matchResult.groupValues[1].toIntOrNull() ?: 0
-            val minutes = matchResult.groupValues[2].toIntOrNull() ?: 0
-            hours * 60 + minutes
-        } else {
-            val minutesRegex = Regex("(\\d+)m")
-            val minutesMatch = minutesRegex.find(duration)
-            minutesMatch?.groupValues?.get(1)?.toIntOrNull()
+        val realUrl = if (data.matches(Regex("\\d+"))) {
+            "https://assistirseriesonline.icu/episodio/$data"
+        } else data
+
+        try {
+            val res = app.get(realUrl)
+            val doc = res.document
+
+            // Tenta botão embedplay
+            val button = doc.selectFirst("button[data-source*='embedplay.upns.pro'], button[data-source*='embedplay.upn.one']")
+            if (button != null) {
+                val source = button.attr("data-source")
+                if (source.isNotBlank()) {
+                    loadExtractor(source, realUrl, subtitleCallback, callback)
+                    return true
+                }
+            }
+
+            // Tenta iframe direto no player
+            val iframe = doc.selectFirst("div.play-overlay div#player iframe")
+            if (iframe != null) {
+                val src = iframe.attr("src")
+                if (src.isNotBlank()) {
+                    loadExtractor(src, realUrl, subtitleCallback, callback)
+                    return true
+                }
+            }
+
+            // Última tentativa: WebViewResolver para players protegidos
+            WebViewResolver(res.text).resolveUsingWebView(res.url) { link ->
+                if (link.contains("m3u8") || link.contains("mp4")) {
+                    callback.invoke(
+                        ExtractorLink(
+                            source = this.name,
+                            name = this.name,
+                            url = link,
+                            referer = realUrl,
+                            quality = Qualities.Unknown.value,
+                            isM3u8 = link.contains("m3u8")
+                        )
+                    )
+                }
+            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+
+        return false
     }
 }
