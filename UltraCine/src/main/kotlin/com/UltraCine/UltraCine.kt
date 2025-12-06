@@ -98,7 +98,7 @@ class UltraCine : MainAPI() {
 
         val isTvSeries = url.contains("/serie/") || doc.select("div.seasons").isNotEmpty()
 
-        if (isTvSeries && playerLinkFromButton != null) {
+        return if (isTvSeries && playerLinkFromButton != null) {
             val episodes = mutableListOf<Episode>()
             try {
                 // Usa o link do botão para carregar a página do iframe de episódio
