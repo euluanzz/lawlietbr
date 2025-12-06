@@ -8,7 +8,58 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 class UltraCine : MainAPI() {
-    // ... (Métodos getMainPage, toSearchResult, search permanecem inalterados) ...
+    override var mainUrl = "https://ultracine.org"
+    override var name = "UltraCine"
+    override val hasMainPage = true
+    override var lang = "pt"
+    override val hasDownloadSupport = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+
+    override val mainPage = mainPageOf(
+        "$mainUrl/category/lancamentos/" to "Lançamentos",
+        "$mainUrl/category/acao/" to "Ação",
+        "$mainUrl/category/animacao/" to "Animação",
+        "$mainUrl/category/comedia/" to "Comédia",
+        "$mainUrl/category/crime/" to "Crime",
+        "$mainUrl/category/documentario/" to "Documentário",
+        "$mainUrl/category/drama/" to "Drama",
+        "$mainUrl/category/familia/" to "Família",
+        "$mainUrl/category/fantasia/" to "Fantasia",
+        "$mainUrl/category/ficcao-cientifica/" to "Ficção Científica",
+        "$mainUrl/category/guerra/" to "Guerra",
+        "$mainUrl/category/kids/" to "Kids",
+        "$mainUrl/category/misterio/" to "Mistério",
+        "$mainUrl/category/romance/" to "Romance",
+        "$mainUrl/category/terror/" to "Terror",
+        "$mainUrl/category/thriller/" to "Thriller"
+    )
+
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val url = request.data + if (page > 1) "page/$page/" else ""
+        val doc = app.get(url).document
+        val items = doc.select("div.aa-cn ul.post-lst li").mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(request.name, items)
+    }
+
+    private fun Element.toSearchResult(): SearchResponse? {
+        val titleEl = selectFirst("h2.entry-title, h3") ?: return null
+        val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
+        val poster = selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: selectFirst("img")?.attr("data-src")
+
+        val year = selectFirst("span.year")?.text()?.toIntOrNull()
+
+        return newMovieSearchResponse(titleEl.text(), href, TvType.Movie) {
+            this.posterUrl = poster?.let { fixUrl(it) }
+            this.year = year
+        }
+    }
+
+    override suspend fun search(query: String): List<SearchResponse> {
+        val url = "$mainUrl/?s=${java.net.URLEncoder.encode(query, "UTF-8")}"
+        val doc = app.get(url).document
+        return doc.select("div.aa-cn ul.post-lst li").mapNotNull { it.toSearchResult() }
+    }
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
@@ -70,13 +121,13 @@ class UltraCine : MainAPI() {
                 } catch (_: Exception) {}
 
             } else {
-                // 2. FALLBACK: PROCURA A LISTA DE EPISÓDIOS NA PÁGINA PRINCIPAL (CORREÇÃO da referência episodeUrl)
+                // 2. FALLBACK: PROCURA A LISTA DE EPISÓDIOS NA PÁGINA PRINCIPAL
                 doc.select("div.seasons ul li a[href*='/episodio/']").forEach { epLink ->
                     val href = epLink.attr("href") // Link completo (DATA)
                     val epTitle = epLink.text().trim()
 
                     if (href.isNotBlank()) {
-                         episodes += newEpisode(href) { // PASSA O HREF CORRIGIDO AQUI
+                         episodes += newEpisode(href) { 
                             this.name = epTitle
                         }
                     }
@@ -89,7 +140,8 @@ class UltraCine : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.score = ratingInt?.let { Score(it, null) } // CORRIGIDO
+                // CORREÇÃO: Usa 'Score(it, null)' que é o construtor público.
+                this.score = ratingInt?.let { Score(it, null) } 
                 addActors(actors)
                 trailer?.let { addTrailer(it) }
             }
@@ -101,16 +153,16 @@ class UltraCine : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.duration = duration
-                this.score = ratingInt?.let { Score(it, null) } // CORRIGIDO
+                // CORREÇÃO: Usa 'Score(it, null)' que é o construtor público.
+                this.score = ratingInt?.let { Score(it, null) } 
                 addActors(actors)
                 trailer?.let { addTrailer(it) }
             }
         }
     } 
-    
-    // ... (Método loadLinks permanece inalterado) ...
-}
 
+    // --- O BLOCO loadLinks E AS FUNÇÕES AUXILIARES DEVEM ESTAR DENTRO DA CLASSE ---
+    
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -119,7 +171,6 @@ class UltraCine : MainAPI() {
     ): Boolean {
 
         val link = if (data.matches(Regex("^\\d+$"))) {
-            // Este regex foi usado para extrair o ID numérico do episódio, agora precisa ser o link completo.
             // Se o ID for numérico, monta o link da página do episódio.
             "https://assistirseriesonline.icu/episodio/$data/"
         } else data 
@@ -135,12 +186,12 @@ class UltraCine : MainAPI() {
                     }
                 }
             } catch (_: Exception) {}
-            
+
             return true 
         }
 
         // 2. Tenta processar o link 'link' (que é o data-source) diretamente como um extrator.
-        if (!link.startsWith(mainUrl)) {
+        if (!link.startsWith(mainUrl)) { // CORRIGIDO: mainUrl é acessível aqui dentro da classe
              loadExtractor(link, data, subtitleCallback, callback)
         }
 
@@ -154,4 +205,4 @@ class UltraCine : MainAPI() {
         val m = Regex("(\\d+)m").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         return if (h > 0 || m > 0) h * 60 + m else null
     }
-}
+} // <-- FECHAMENTO CORRETO DA CLASSE UltraCine
