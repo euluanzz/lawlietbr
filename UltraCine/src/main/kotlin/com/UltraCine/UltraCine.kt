@@ -276,5 +276,6 @@ private fun extractQualityFromUrl(url: String): Int {
         url.contains("/720/") -> 720
         url.contains("/1080/") -> 1080
         else -> Qualities.Unknown.value
-    }
-}
+     }
+   }
+ }
