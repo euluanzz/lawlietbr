@@ -119,7 +119,8 @@ class UltraCine : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.score = ratingInt?.let { Score(it) }          // ← CORRETO
+                this.score = ratingInt?.let { newScore(it) } 
+          // ← CORRETO
                 addActors(actors)
                 trailer?.let { addTrailer(it) }
             }
@@ -130,7 +131,8 @@ class UltraCine : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.duration = duration
-                this.score = ratingInt?.let { Score(it) }        // ← CORRETO
+                this.score = ratingInt?.let { newScore(it) } 
+       // ← CORRETO
                 addActors(actors)
                 trailer?.let { addTrailer(it) }
             }
