@@ -164,145 +164,122 @@ class UltraCine : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        if (data.isBlank()) return false
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    if (data.isBlank()) return false
 
-        return try {
-            // Determina a URL base baseada no tipo de conteúdo
-            val realUrl = if (data.matches(Regex("\\d+"))) {
-                // É um ID de episódio (série)
+    return try {
+        // DETECTA O TIPO DE DADO:
+        // 1. Apenas números: ID do episódio (ex: "354356")
+        // 2. URL do ultracine.org com números: (ex: "https://ultracine.org/354356")
+        // 3. URL completa do assistirseriesonline: (ex: "https://assistirseriesonline.icu/episodio/354356")
+        
+        val finalUrl = when {
+            // Caso 1: Apenas números (ID do episódio)
+            data.matches(Regex("^\\d+$")) -> {
                 "https://assistirseriesonline.icu/episodio/$data"
-            } else {
-                // URL completa (pode ser filme ou série)
-                data
             }
+            // Caso 2: URL do ultracine com números no final
+            data.contains("ultracine.org/") && data.matches(Regex(".*/\\d+$")) -> {
+                // Extrai o ID da URL
+                val id = data.substringAfterLast("/")
+                "https://assistirseriesonline.icu/episodio/$id"
+            }
+            // Caso 3: Já é uma URL válida
+            else -> data
+        }
 
-            val res = app.get(realUrl)
-            val doc = res.document
-            val html = res.text
-
-            // TENTATIVA 1: Procurar por players de vídeo diretos (MP4, M3U8)
-            // Verifica elementos <video> com src
-            doc.select("video[src]").forEach { video ->
-                val videoUrl = video.attr("src")
-                if (videoUrl.isNotBlank()) {
-                    createAndSendLink(videoUrl, realUrl, callback)
+        println("DEBUG: Carregando URL: $finalUrl") // Para depuração
+        
+        val res = app.get(finalUrl, referer = mainUrl)
+        val doc = res.document
+        
+        // TENTATIVA 1: Procurar elementos <video> diretos (como o exemplo que você viu)
+        doc.select("video[src]").forEach { video ->
+            val videoUrl = video.attr("src")
+            if (videoUrl.isNotBlank()) {
+                println("DEBUG: Encontrado vídeo direto: $videoUrl")
+                val link = newExtractorLink(
+                    source = this.name,
+                    name = this.name,
+                    url = videoUrl
+                )
+                callback.invoke(link)
+                return true
+            }
+        }
+        
+        // TENTATIVA 2: Procurar elementos com data-src
+        doc.select("[data-src]").forEach { element ->
+            val videoUrl = element.attr("data-src")
+            if (videoUrl.isNotBlank() && (videoUrl.contains(".mp4") || videoUrl.contains(".m3u8"))) {
+                println("DEBUG: Encontrado data-src: $videoUrl")
+                val link = newExtractorLink(
+                    source = this.name,
+                    name = this.name,
+                    url = videoUrl
+                )
+                callback.invoke(link)
+                return true
+            }
+        }
+        
+        // TENTATIVA 3: Procurar por iframes (players embed)
+        doc.select("iframe[src]").forEach { iframe ->
+            val src = iframe.attr("src")
+            if (src.isNotBlank()) {
+                println("DEBUG: Encontrado iframe: $src")
+                if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
                     return true
                 }
             }
-
-            // Verifica elementos com data-src (players JS)
-            doc.select("[data-src*='.mp4'], [data-src*='.m3u8']").forEach { element ->
-                val videoUrl = element.attr("data-src")
-                if (videoUrl.isNotBlank()) {
-                    createAndSendLink(videoUrl, realUrl, callback)
+        }
+        
+        // TENTATIVA 4: Procurar por botões com data-source (EmbedPlay)
+        doc.select("button[data-source]").forEach { button ->
+            val source = button.attr("data-source")
+            if (source.isNotBlank()) {
+                println("DEBUG: Encontrado botão data-source: $source")
+                if (loadExtractor(source, finalUrl, subtitleCallback, callback)) {
                     return true
                 }
             }
-
-            // TENTATIVA 2: Procurar por iframes de players
-            // Primeiro, tenta iframes comuns
-            val iframes = doc.select("iframe[src]")
-            for (iframe in iframes) {
-                val src = iframe.attr("src")
-                if (src.isNotBlank()) {
-                    // Se for um URL de player conhecido
-                    if (src.contains("embedplay") || src.contains("player") || 
-                        src.contains("stream") || src.contains("video")) {
-                        
-                        if (loadExtractor(src, realUrl, subtitleCallback, callback)) {
-                            return true
-                        }
-                    }
-                }
-            }
-
-            // TENTATIVA 3: Procurar por botões com data-source (EmbedPlay)
-            val button = doc.selectFirst("button[data-source]")
-            if (button != null) {
-                val source = button.attr("data-source")
-                if (source.isNotBlank() && loadExtractor(source, realUrl, subtitleCallback, callback)) {
-                    return true
-                }
-            }
-
-            // TENTATIVA 4: Analisar HTML para encontrar URLs de vídeo em scripts
-            // Procura por padrões comuns de URLs de vídeo
-            val videoPatterns = listOf(
-                Regex("""(https?://[^"' ]+\.(?:mp4|m3u8)[^"' ]*)"""),
-                Regex("""["'](https?://[^"' ]+\.(?:mp4|m3u8))["']"""),
-                Regex("""src\s*[:=]\s*["'](https?://[^"' ]+\.(?:mp4|m3u8))["']"""),
-                Regex("""file\s*[:=]\s*["'](https?://[^"' ]+\.(?:mp4|m3u8))["']""")
-            )
-
-            for (pattern in videoPatterns) {
-                val matches = pattern.findAll(html)
-                for (match in matches) {
-                    val videoUrl = match.groupValues[1]
-                    if (videoUrl.isNotBlank() && !videoUrl.contains("banner") && !videoUrl.contains("ads")) {
-                        createAndSendLink(videoUrl, realUrl, callback)
-                        return true
-                    }
-                }
-            }
-
-            // TENTATIVA 5: Para séries, verifica se há múltiplos servidores
-            val serverButtons = doc.select("button[data-id], li[data-id]")
-            if (serverButtons.isNotEmpty()) {
-                // Tenta cada servidor
-                for (server in serverButtons) {
-                    val serverId = server.attr("data-id")
-                    if (serverId.isNotBlank()) {
-                        val serverUrl = "$realUrl?server=$serverId"
-                        if (loadExtractor(serverUrl, realUrl, subtitleCallback, callback)) {
-                            return true
-                        }
-                    }
-                }
-            }
-
-            false
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
-
-    // Nova abordagem usando newExtractorLink corretamente
-    private suspend fun createAndSendLink(videoUrl: String, referer: String, callback: (ExtractorLink) -> Unit) {
-        val quality = when {
-            videoUrl.contains("360p", ignoreCase = true) -> Qualities.P360.value
-            videoUrl.contains("480p", ignoreCase = true) -> Qualities.P480.value
-            videoUrl.contains("720p", ignoreCase = true) -> Qualities.P720.value
-            videoUrl.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
-            videoUrl.contains("2160p", ignoreCase = true) -> Qualities.P2160.value
-            else -> Qualities.Unknown.value
         }
         
-        val isM3u8 = videoUrl.contains("m3u8", ignoreCase = true)
-        
-        // Tentativa 1: Usando newExtractorLink com configurações no bloco
-        val link = newExtractorLink(
-            source = this.name,
-            name = "${this.name} (${if (quality != Qualities.Unknown.value) "${quality}p" else "Unknown"})",
-            url = videoUrl
-        ) {
-            // Aqui tentamos configurar as propriedades
-            // Nota: As propriedades podem ser val, então talvez não funcione
-        }
-        
-        // Como não podemos modificar as propriedades, vamos tentar uma abordagem diferente
-        // Tentativa 2: Criar um link simples e confiar que o sistema vai detectar a qualidade
-        val simpleLink = newExtractorLink(
-            source = this.name,
-            name = this.name,
-            url = videoUrl
+        // TENTATIVA 5: Procurar por scripts JavaScript
+        val html = res.text
+        val videoPatterns = listOf(
+            Regex("""src\s*=\s*["'](https?://[^"' ]+\.mp4[^"' ]*)["']"""),
+            Regex("""src\s*=\s*["'](https?://[^"' ]+\.m3u8[^"' ]*)["']"""),
+            Regex("""file\s*:\s*["'](https?://[^"' ]+\.mp4[^"' ]*)["']"""),
+            Regex("""["'](https?://[^"' ]+storage\.googleapis\.com[^"' ]+\.mp4)["']""")
         )
         
-        callback.invoke(simpleLink)
+        for (pattern in videoPatterns) {
+            val matches = pattern.findAll(html)
+            for (match in matches) {
+                val videoUrl = match.groupValues[1]
+                if (videoUrl.isNotBlank() && !videoUrl.contains("banner") && !videoUrl.contains("ads")) {
+                    println("DEBUG: Encontrado no regex: $videoUrl")
+                    val link = newExtractorLink(
+                        source = this.name,
+                        name = this.name,
+                        url = videoUrl
+                    )
+                    callback.invoke(link)
+                    return true
+                }
+            }
+        }
+        
+        println("DEBUG: Nenhum vídeo encontrado")
+        false
+    } catch (e: Exception) {
+        println("DEBUG: Erro ao carregar links: ${e.message}")
+        e.printStackTrace()
+        false
     }
 }
