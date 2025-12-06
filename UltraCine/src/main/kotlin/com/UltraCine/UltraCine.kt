@@ -281,4 +281,5 @@ class UltraCine : MainAPI() {
         }
         false
     }
+  }
 }
