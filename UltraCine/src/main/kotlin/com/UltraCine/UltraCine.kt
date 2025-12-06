@@ -43,30 +43,73 @@ class UltraCine : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
-        val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
-        val posterUrl = selectFirst("div.post-thumbnail figure img")?.attr("src")
-            ?.takeIf { it.isNotBlank() } ?: selectFirst("div.post-thumbnail figure img")?.attr("data-src")
-            ?.let { fixUrl(it).replace("/w500/", "/original/") }
-
-        val year = selectFirst("span.year")?.text()?.toIntOrNull()
-        val isSerie = href.contains("/serie/")
-        val type = if (isSerie) TvType.TvSeries else TvType.Movie
-
-        return if (isSerie) {
-            newTvSeriesSearchResponse(title, href, type) {
-                this.posterUrl = posterUrl
-                this.year = year
-            }
-        } else {
-            newMovieSearchResponse(title, href, type) {
-                this.posterUrl = posterUrl
-                this.year = year
-                this.quality = getQualityFromString(selectFirst("span.post-ql")?.text())
-            }
-        }
+    val title = selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
+    val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
+    
+    // CORREÇÃO DOS POSTERS - Múltiplas tentativas
+    val posterUrl = try {
+        // Tentativa 1: Imagem com data-src (lazy loading)
+        selectFirst("img[data-src]")?.attr("data-src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it) }
+            ?.replace("/w500/", "/original/")
+            ?.replace("/w300/", "/original/")
+            ?.replace("/w200/", "/original/")
+        
+        // Tentativa 2: Imagem com src normal
+        ?: selectFirst("img")?.attr("src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it) }
+            ?.replace("/w500/", "/original/")
+            ?.replace("/w300/", "/original/")
+            ?.replace("/w200/", "/original/")
+        
+        // Tentativa 3: Imagem dentro da thumbnail
+        ?: selectFirst("div.post-thumbnail img")?.attr("src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it) }
+            ?.replace("/w500/", "/original/")
+            ?.replace("/w300/", "/original/")
+            ?.replace("/w200/", "/original/")
+        
+        // Tentativa 4: Imagem da figura
+        ?: selectFirst("figure img")?.attr("src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it) }
+            ?.replace("/w500/", "/original/")
+            ?.replace("/w300/", "/original/")
+            ?.replace("/w200/", "/original/")
+        
+        // Tentativa 5: Qualquer imagem com w500 no URL
+        ?: selectFirst("img[src*='w500']")?.attr("src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it) }
+            ?.replace("/w500/", "/original/")
+        
+    } catch (e: Exception) {
+        null
     }
 
+    val year = selectFirst("span.year")?.text()?.toIntOrNull()
+    val isSerie = href.contains("/serie/")
+    val type = if (isSerie) TvType.TvSeries else TvType.Movie
+
+    // DEBUG: Ver o que está sendo encontrado
+    // println("DEBUG: Title: $title, Poster: $posterUrl, Year: $year, Serie: $isSerie")
+
+    return if (isSerie) {
+        newTvSeriesSearchResponse(title, href, type) {
+            this.posterUrl = posterUrl
+            this.year = year
+        }
+    } else {
+        newMovieSearchResponse(title, href, type) {
+            this.posterUrl = posterUrl
+            this.year = year
+            this.quality = getQualityFromString(selectFirst("span.post-ql")?.text())
+        }
+    }
+}
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl/?s=$query").document
         return document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
