@@ -250,26 +250,27 @@ class UltraCine : MainAPI() {
 
              // Linha ~252:
 // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
-// Linha 255: Onde o erro de tipo começa
-           if ( (html as CharSequence).contains("apiblogger.click", ignoreCase = true) || (finalUrl as CharSequence).contains("episodio/", ignoreCase = true) ) {
-    // Linha 257 (A declaração do Resolver, que causa o erro em cascata)
+// A linha crítica de comparação é a 256
+if (html.contains("apiblogger.click", ignoreCase = true) || finalUrl.contains("episodio/", ignoreCase = true)) {
+
+    // Linha ~257: Onde o erro de tipo é reportado
     val resolver = com.lagradost.cloudstream3.network.WebViewResolver(html) 
     
-    // Chamada da função de resolução
+    // Linha ~259: Onde o erro de sobrecarga ocorre
+    // Usamos o resolvedor com a função lambda estável (que aceita String?)
     resolver.resolveUsingWebView(finalUrl) { link: String? ->
-        // Forçamos a variável link a ser uma String válida (não nula) antes de usar
+        
+        // Forçando o resolvedLink a ser não nulo e do tipo String (para evitar o erro no loadExtractor)
         val resolvedLink = link ?: return@resolveUsingWebView
 
         // Bloco de filtro para m3u8/mp4
-        // A sintaxe com 'ignoreCase = true' é a única forma estável
         if (resolvedLink.contains(".m3u8", ignoreCase = true) || resolvedLink.contains(".mp4", ignoreCase = true)) {
-            // Linha ~264 (Chamada estável de loadExtractor)
+            // Linha ~267: Chamada estável de loadExtractor
             loadExtractor(resolvedLink, finalUrl, subtitleCallback, callback) 
         }
     }
     return true
 }
-
             return false
 
         } catch (e: Exception) {
