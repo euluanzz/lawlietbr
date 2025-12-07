@@ -85,33 +85,49 @@ class SuperFlix : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/?s=$query"
+    val url = "\( mainUrl/?s= \){query.urlEncode()}"
+    val response = app.get(url, headers = defaultHeaders)
+    val document = response.document
 
-        val response = app.get(url, headers = defaultHeaders)
-        val document = response.document 
+    val results = document.select("a.card, div.card").mapNotNull { element ->
+        val titleElement = element.selectFirst(".card-title, h3, h2, .title")
+            ?: return@mapNotNull null
+        val title = titleElement.text().trim()
 
-        val results = document.select("a.card, div.card").mapNotNull { element ->
+        // Poster com fallback seguro
+        val posterUrl = element.selectFirst(".card-img img, img")?.attr("src")
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { fixUrl(it) }
+            ?: element.attr("data-src")?.let { fixUrl(it) }
+            ?: element.attr("style")?.let { Regex("""url\(['"]?([^'"]+)['"]?\)""").find(it)?.groupValues?.get(1) }
+            ?: return@mapNotNull null
 
-            // Extração de Dados
-            val title = element.selectFirst(".card-title")?.text()?.trim() ?: return@mapNotNull null
-            val posterUrl = element.selectFirst(".card-img")?.attr("src")?.let { fixUrl(it) } ?: return@mapNotNull null
-            
-            val href = element.attr("href").ifEmpty { 
-                element.selectFirst("a")?.attr("href") 
-            } ?: return@mapNotNull null
+        // Link da página do filme/série
+        val href = element.attr("href").ifEmpty {
+            element.selectFirst("a")?.attr("href")
+        } ?: return@mapNotNull null
 
-            val typeText = element.selectFirst(".card-meta")?.text()?.trim() ?: "Filme" 
-            val type = if (typeText.contains("Série", ignoreCase = true)) TvType.TvSeries else TvType.Movie
-
-            // CORRIGIDO: Escopo e newSearchResponse
-            newSearchResponse(title, fixUrl(href), type) {
-                this.posterUrl = posterUrl
-            }
+        // Detecção de tipo (Filme ou Série)
+        val typeText = element.selectFirst(".card-meta, .type, .category")?.text() ?: ""
+        val type = when {
+            typeText.contains("série", ignoreCase = true) || 
+            typeText.contains("series", ignoreCase = true) || 
+            title.contains("temporada", ignoreCase = true) -> TvType.TvSeries
+            else -> TvType.Movie
         }
 
-        return results
+        // Aqui está o segredo: usar this.posterUrl CORRETAMENTE
+        newSearchResponse(title, fixUrl(href), type) {
+            this.posterUrl = posterUrl
+        }
     }
 
+    if (results.isEmpty()) {
+        throw ErrorLoadingException("Nenhum resultado encontrado para: $query")
+    }
+
+    return results
+}
     override suspend fun load(url: String): LoadResponse {
         val response = app.get(url, headers = defaultHeaders) 
         val document = response.document
