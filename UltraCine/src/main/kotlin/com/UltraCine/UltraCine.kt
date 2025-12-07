@@ -152,10 +152,9 @@ class UltraCine : MainAPI() {
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
-
     if (data.isBlank()) return false
 
-    // É episódio se vier só o número OU se já for a URL do assistirseriesonline
+    // Detecta episódio
     val isEpisode = data.matches("^\\d+$".toRegex()) || data.contains("assistirseriesonline.icu")
 
     val url = if (data.matches("^\\d+$".toRegex())) {
@@ -166,38 +165,20 @@ class UltraCine : MainAPI() {
 
     return try {
         if (isEpisode) {
-            // Força WebView + JS para pular anúncio e dar play automaticamente
             val res = app.get(url, referer = mainUrl)
-
             val resolver = WebViewResolver(res.text)
-
-            // Aqui o upns.one vai pegar o link final (Google Storage direto, sem marca d'água)
             resolver.resolveUsingWebView(url) { link ->
+                // upns.one resolve o link (sem marca d'água)
                 loadExtractor(link, url, subtitleCallback, callback)
             }
-
-            // JS que roda dentro do WebView: espera 4s e clica em tudo que puder
-            resolver.webView?.evaluateJavascript(
-                """
-                setTimeout(function() {
-                    // tenta todos os botões possíveis de skip / play
-                    document.querySelectorAll('button, .skip-ad, .jw-skip, .jw-display-icon-container, .play-btn, [aria-label*="Skip"], [aria-label*="Play"]')
-                        .forEach(btn => btn.click());
-                    // força play no JW Player
-                    if (window.jwplayer) jwplayer().play();
-                }, 4000);
-                """.trimIndent(), null
-            )
-
-            delay(18000) // 18 segundos é o número mágico que funciona em TODOS os episódios
+            delay(20000) // 20s: ad + play auto do site + injection
             true
         } else {
-            // Filmes continuam normais (upns.one resolve)
             loadExtractor(url, mainUrl, subtitleCallback, callback)
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        isEpisode // episódio sempre retorna true (WebView ainda está tentando)
+        isEpisode
     }
   }
 }
