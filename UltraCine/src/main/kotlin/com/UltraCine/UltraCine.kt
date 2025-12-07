@@ -250,31 +250,33 @@ class UltraCine : MainAPI() {
 
              // Linha ~252:
 // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
+// VERSÃO À PROVA DE KOTLIN 2.1.0 E DO CI DO CLOUDSTREAM
 if (
-    "apiblogger.click".toRegex(RegexOption.IGNORE_CASE) in html ||   // forma correta e limpa
-    "episodio/".toRegex(RegexOption.IGNORE_CASE) in finalUrl
+    html.contains("apiblogger.click", ignoreCase = true) ||
+    finalUrl.contains("episodio/", ignoreCase = true)
 ) {
-    val resolver = WebViewResolver(html)
+    // Forçamos o tipo da string pra CharSequence explicitamente
+    // Isso quebra a ambiguidade que o Kotlin 2.1.0 cria com Regex
+    val htmlCs: CharSequence = html
+    val urlCs: CharSequence = finalUrl
 
-    // resolveUsingWebView NÃO é suspend na versão atual do Cloudstream3
-    // pode ser chamada diretamente dentro de loadLinks (que é suspend)
-    val (mainRequest, subRequests) = resolver.resolveUsingWebView(finalUrl)
+    if ("apiblogger.click" in htmlCs || "episodio/" in urlCs) {
+        val resolver = WebViewResolver(html)
 
-    mainRequest?.url?.toString()?.let { link ->
-        if (link.contains(".m3u8", ignoreCase = true) || link.contains(".mp4", ignoreCase = true)) {
-            loadExtractor(link, finalUrl, subtitleCallback, callback)
+        val (mainRequest, subRequests) = resolver.resolveUsingWebView(finalUrl)
+
+        mainRequest?.url?.toString()?.takeIf {
+            it.contains(".m3u8", ignoreCase = true) || it.contains(".mp4", ignoreCase = true)
+        }?.let { loadExtractor(it, finalUrl, subtitleCallback, callback) }
+
+        subRequests.forEach { req ->
+            req.url?.toString()?.takeIf {
+                it.contains(".m3u8", ignoreCase = true) || it.contains(".mp4", ignoreCase = true)
+            }?.let { loadExtractor(it, finalUrl, subtitleCallback, callback) }
         }
-    }
 
-    subRequests.forEach { req ->
-        req.url?.toString()?.let { link ->
-            if (link.contains(".m3u8", ignoreCase = true) || link.contains(".mp4", ignoreCase = true)) {
-                loadExtractor(link, finalUrl, subtitleCallback, callback)
-            }
-        }
+        return true
     }
-
-    return true
 }
             return false
 
