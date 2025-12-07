@@ -62,13 +62,14 @@ class SuperFlix : MainAPI() {
         val response = app.get(url, headers = defaultHeaders)
         val document = response.document
 
-        // Extração de resultados (CORRIGIDA E ESTÁVEL)
         val list = document.select("a.card").mapNotNull { element -> 
             val title = element.attr("title")
             val url = fixUrl(element.attr("href"))
             
-            // REMOVIDO: val posterUrl = ...
-            // O valor é extraído diretamente no bloco newSearchResponse
+            // CORREÇÃO POSTER: Busca por data-src ou src em qualquer <img>
+            val posterUrl = element.selectFirst("img")?.attr("data-src")
+                .takeIf { it?.isNotEmpty() == true } 
+                ?: element.selectFirst("img")?.attr("src")
 
             if (title.isNullOrEmpty() || url.isNullOrEmpty()) return@mapNotNull null
 
@@ -78,8 +79,7 @@ class SuperFlix : MainAPI() {
             val type = if (url.contains("/filme/")) TvType.Movie else TvType.TvSeries
 
             newSearchResponse(cleanTitle, url, type) {
-                // CORREÇÃO FINAL: Extrai o poster URL aqui
-                this.posterUrl = element.selectFirst("img.card-img")?.attr("src")?.let { fixUrl(it) }
+                this.posterUrl = posterUrl?.let { fixUrl(it) } // Uso seguro
                 this.year = year
             }
         }
@@ -93,12 +93,15 @@ class SuperFlix : MainAPI() {
         val response = app.get(url, headers = defaultHeaders)
         val document = response.document 
 
-        // Extração de resultados (CORRIGIDA E ESTÁVEL)
         val results = document.select("a.card, div.card").mapNotNull { element ->
 
             val title = element.selectFirst(".card-title")?.text()?.trim() ?: return@mapNotNull null
-            // REMOVIDO: val posterUrl = ...
             
+            // CORREÇÃO POSTER: Busca por data-src ou src em qualquer <img>
+            val posterUrl = element.selectFirst("img")?.attr("data-src")
+                .takeIf { it?.isNotEmpty() == true } 
+                ?: element.selectFirst("img")?.attr("src")
+
             val href = element.attr("href").ifEmpty { 
                 element.selectFirst("a")?.attr("href") 
             } ?: return@mapNotNull null
@@ -107,8 +110,7 @@ class SuperFlix : MainAPI() {
             val type = if (typeText.contains("Série", ignoreCase = true)) TvType.TvSeries else TvType.Movie
 
             newSearchResponse(title, fixUrl(href), type) {
-                // CORREÇÃO FINAL: Extrai o poster URL aqui
-                this.posterUrl = element.selectFirst(".card-img")?.attr("src")?.let { fixUrl(it) }
+                this.posterUrl = posterUrl?.let { fixUrl(it) } // Uso seguro
             }
         }
 
@@ -155,9 +157,9 @@ class SuperFlix : MainAPI() {
         val chipTexts = tags.toSet() 
 
         val actors = allDivLinks
-            .filter { linkText -> linkText !in chipTexts } // Remove tags
-            .filter { linkText -> !linkText.contains("Assista sem anúncios") } // Remove propaganda
-            .filter { it.isNotEmpty() && it.length > 2 }   // Remove ruídos
+            .filter { linkText -> linkText !in chipTexts }
+            .filter { linkText -> !linkText.contains("Assista sem anúncios") }
+            .filter { it.isNotEmpty() && it.length > 2 }
             .distinct() 
             .take(15) 
             .toList()
