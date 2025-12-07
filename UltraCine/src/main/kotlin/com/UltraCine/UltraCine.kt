@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink // Adicionado para clareza
 import com.lagradost.cloudstream3.utils.ExtractorLinkType // Adicionado para clareza
 import com.lagradost.cloudstream3.utils.Qualities // Adicionado para clareza
 import org.jsoup.nodes.Element
+import com.lagradost.cloudstream3.network.WebViewResolver 
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -176,112 +177,92 @@ class UltraCine : MainAPI() {
     // ====================================================================
     
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        if (data.isBlank()) return false
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    if (data.isBlank()) return false
 
-        return try {
-            // 1. DETERMINA A URL FINAL DO PLAYER (OU PÁGINA DO EPISÓDIO)
-            val finalUrl = when {
-                // ID numérico (EPISÓDIO DE SÉRIE)
-                data.matches(Regex("^\\d+$")) -> {
-                    "https://assistirseriesonline.icu/episodio/$data"
-                }
-                // URL do ultracine com ID (EPISÓDIO DE SÉRIE)
-                data.contains("ultracine.org/") && data.matches(Regex(".*/\\d+$")) -> {
-                    val id = data.substringAfterLast("/")
-                    "https://assistirseriesonline.icu/episodio/$id"
-                }
-                // URL normal (GERALMENTE FILMES)
-                else -> data
+    return try {
+        // 1. DETERMINA A URL FINAL DO PLAYER (OU PÁGINA DO EPISÓDIO)
+        val finalUrl = when {
+            data.matches(Regex("^\\d+$")) -> {
+                "https://assistirseriesonline.icu/episodio/$data"
             }
-
-            val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
-            val doc = res.document
-            val html = res.text
-            
-            // ========== 2. DETECÇÃO DE LINKS DE VÍDEO DIRETOS (JW Player, MP4) ==========
-            
-            // Procura por links MP4/M3U8 no HTML (JW Player, Google Storage, genéricos)
-            val videoPattern = Regex("""(https?://[^"'\s<>]+\.(?:mp4|m3u8)[^"'\s<>]*)""")
-            val videoMatches = videoPattern.findAll(html).toList()
-            
-            if (videoMatches.isNotEmpty()) {
-                videoMatches.forEach { match ->
-                    val videoUrl = match.groupValues[1]
-                    
-                    if (videoUrl.isNotBlank() && 
-                        !videoUrl.contains("banner", true) && 
-                        !videoUrl.contains("ads", true)) {
-                        
-                        val quality = extractQualityFromUrl(videoUrl)
-                        val isM3u8 = videoUrl.contains(".m3u8", true)
-                        
-                        val linkName = if (quality != Qualities.Unknown.value) {
-                            "${this.name} (${quality}p)"
-                        } else {
-                            this.name
-                        }
-                        
-                        // USANDO A FUNÇÃO AUXILIAR CORRETA newExtractorLink (Cloudstream v3+)
-                        val link = newExtractorLink(
-                            source = this.name,
-                            name = linkName,
-                            url = videoUrl
-                        ) {
-                            // Definindo tipo corretamente para compatibilidade futura
-                            this.type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                            this.quality = quality
-                        }
-                        callback.invoke(link)
-                        return true
-                    }
-                }
+            data.contains("ultracine.org/") && data.matches(Regex(".*/\\d+$")) -> {
+                val id = data.substringAfterLast("/")
+                "https://assistirseriesonline.icu/episodio/$id"
             }
-            
-            // ========== 3. DETECÇÃO DE IFRAMES/BOTÕES (EmbedPlay) ==========
-            
-            var success = false
-            
-            // A. Tenta iframes (prioriza players conhecidos)
-            doc.select("iframe[src]").forEach { iframe ->
-                val src = iframe.attr("src")
-                if (src.isNotBlank() && (src.contains("embedplay", true) || src.contains("player", true))) {
-                    if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
-                        success = true
-                    }
-                }
-            }
-            if (success) return true
-
-            // B. Tenta botões com data-source (EmbedPlay ou outros players)
-            doc.select("button[data-source]").forEach { button ->
-                val source = button.attr("data-source")
-                if (source.isNotBlank() && loadExtractor(source, finalUrl, subtitleCallback, callback)) {
-                    success = true
-                }
-            }
-            if (success) return true
-            
-            // C. Tenta qualquer iframe restante como último recurso
-            doc.select("iframe[src]").forEach { iframe ->
-                val src = iframe.attr("src")
-                if (src.isNotBlank() && loadExtractor(src, finalUrl, subtitleCallback, callback)) {
-                    success = true
-                }
-            }
-
-            return success
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            // Se falhar, retorna falso (ou true se for série e não for um erro crítico)
-            return false
+            else -> data
         }
+
+        val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
+        val doc = res.document
+        val html = res.text
+        
+        var success = false
+        
+        // ========== 2. DETECÇÃO DE IFRAMES/BOTÕES (Players conhecidos) ==========
+        
+        // A. Tenta botões com data-source (EmbedPlay, Upns, etc.)
+        doc.select("button[data-source]").forEach { button ->
+            val source = button.attr("data-source")
+            if (source.isNotBlank()) {
+                if (loadExtractor(source, finalUrl, subtitleCallback, callback)) {
+                    success = true
+                }
+            }
+        }
+        if (success) return true
+
+        // B. Tenta iframes específicos do player EmbedPlay/Upns (que funcionou no episódio 1)
+        doc.select("iframe[src]").forEach { iframe ->
+            val src = iframe.attr("src")
+            if (src.isNotBlank() && (
+                src.contains("embedplay.upns.pro", ignoreCase = true) || 
+                src.contains("embedplay.upn.one", ignoreCase = true) ||
+                src.contains("embedplay.upns.ink", ignoreCase = true)) 
+            ) {
+                if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
+                    success = true
+                }
+            }
+        }
+        if (success) return true
+        
+        // C. Tenta qualquer iframe que pareça ser um player de vídeo
+        doc.select("iframe[src]").forEach { iframe ->
+            val src = iframe.attr("src")
+            if (src.isNotBlank() && (src.contains("player", ignoreCase = true) || src.contains("video", ignoreCase = true))) {
+                if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
+                    success = true
+                }
+            }
+        }
+        if (success) return true
+
+        // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
+        // Se o link apiblogger for detectado (ou seja, o player é injetado via JS)
+        if (html.contains("apiblogger.click", ignoreCase = true) || finalUrl.contains("episodio/")) {
+            val resolver = WebViewResolver(html)
+            resolver.resolveUsingWebView(finalUrl) { link ->
+                // Tentamos resolver o link final (m3u8/mp4)
+                if (link.contains(".m3u8", ignoreCase = true) || link.contains(".mp4", ignoreCase = true)) {
+                    // Chamamos o loadExtractor no link RESOLVIDO
+                    loadExtractor(link, finalUrl, subtitleCallback, callback)
+                }
+            }
+            return true // Retorna true porque o WebViewResolver foi iniciado
+        }
+        
+        return false // Falha se nada foi encontrado
+
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return false
     }
+}
 
     // Função auxiliar para extrair qualidade (mantém a mesma)
     private fun extractQualityFromUrl(url: String): Int {
