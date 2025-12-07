@@ -179,115 +179,153 @@ class UltraCine : MainAPI() {
     // ... (parte inicial do loadLinks) ...
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        if (data.isBlank()) return false
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Boolean
+): Boolean {
+    if (data.isBlank()) return false
 
-        return try {
-            // 1. DETERMINA A URL FINAL DO PLAYER (OU PÁGINA DO EPISÓDIO)
-            val finalUrl = when {
-                // ID numérico (EPISÓDIO DE SÉRIE)
-                data.matches(Regex("^\\d+$")) -> {
-                    "https://assistirseriesonline.icu/episodio/$data"
-                }
-                // URL do ultracine com ID (EPISÓDIO DE SÉRIE)
-                // CORRIGIDO: Usando 'ignoreCase = true' para forçar a comparação de String e evitar conflito de Regex.
-                data.contains("ultracine.org/", ignoreCase = true) && data.matches(Regex(".*/\\d+$")) -> { 
-                    val id = data.substringAfterLast("/")
-                    "https://assistirseriesonline.icu/episodio/$id"
-                }
-                // URL normal (GERALMENTE FILMES)
-                else -> data
+    return try {
+        // 1. DETERMINA A URL FINAL DO PLAYER
+        val finalUrl = when {
+            // ID numérico (EPISÓDIO DE SÉRIE)
+            data.matches(Regex("^\\d+$")) -> {
+                "https://assistirseriesonline.icu/episodio/$data"
             }
-
-            val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
-            val doc = res.document
-            val html = res.text
-            
-            var success = false
-
-            // ========== 2. DETECÇÃO DE IFRAMES/BOTÕES (Players conhecidos) ==========
-
-            // A. Tenta botões com data-source (EmbedPlay, Upns, etc.)
-            doc.select("button[data-source]").forEach { button ->
-                val source = button.attr("data-source")
-                if (source.isNotBlank()) {
-                    if (loadExtractor(source, finalUrl, subtitleCallback, callback)) {
-                        success = true
-                    }
-                }
+            // URL do ultracine com ID (EPISÓDIO DE SÉRIE)
+            data.contains("ultracine.org/") && data.matches(Regex(".*/\\d+$")) -> { 
+                val id = data.substringAfterLast("/")
+                "https://assistirseriesonline.icu/episodio/$id"
             }
-            if (success) return true
-
-            // B. Tenta iframes específicos do player EmbedPlay/Upns
-            doc.select("iframe[src]").forEach { iframe ->
-                val src = iframe.attr("src")
-                if (src.isNotBlank() && (
-                    src.contains("embedplay.upns.pro", ignoreCase = true) || 
-                    src.contains("embedplay.upn.one", ignoreCase = true) ||
-                    src.contains("embedplay.upns.ink", ignoreCase = true)) 
-                ) {
-                    if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
-                        success = true
-                    }
-                }
-            }
-            if (success) return true
-
-            // C. Tenta qualquer iframe que pareça ser um player de vídeo
-            doc.select("iframe[src]").forEach { iframe ->
-                val src = iframe.attr("src")
-                if (src.isNotBlank() && (src.contains("player", ignoreCase = true) || src.contains("video", ignoreCase = true))) {
-                    if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
-                        success = true
-                    }
-                }
-            }
-            if (success) return true
-
-             // Linha ~252:
-// Linha ~252:
-// ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
-if (
-    html.contains("apiblogger.click", ignoreCase = true) ||
-    finalUrl.contains("episodio/", ignoreCase = true)
-) {
-    // Método 1: Usando contains() diretamente (mais seguro)
-    val shouldUseWebView = html.contains("apiblogger.click", ignoreCase = true) ||
-                          finalUrl.contains("episodio/", ignoreCase = true)
-    
-    if (shouldUseWebView) {
-        val resolver = WebViewResolver(html)
-
-        val (mainRequest, subRequests) = resolver.resolveUsingWebView(finalUrl)
-
-        mainRequest?.url?.toString()?.takeIf {
-            it.contains(".m3u8", ignoreCase = true) || it.contains(".mp4", ignoreCase = true)
-        }?.let { loadExtractor(it, finalUrl, subtitleCallback, callback) }
-
-        subRequests.forEach { req ->
-            req.url?.toString()?.takeIf {
-                it.contains(".m3u8", ignoreCase = true) || it.contains(".mp4", ignoreCase = true)
-            }?.let { loadExtractor(it, finalUrl, subtitleCallback, callback) }
+            // URL normal (FILMES)
+            else -> data
         }
 
-        return true
+        val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
+        val doc = res.document
+        val html = res.text
+
+        var success = false
+
+        // ========== 2. DETECÇÃO DE IFRAMES/BOTÕES ==========
+        // A. Tenta botões com data-source
+        doc.select("button[data-source]").forEach { button ->
+            val source = button.attr("data-source")
+            if (source.isNotBlank()) {
+                if (loadExtractor(source, finalUrl, subtitleCallback, callback)) {
+                    success = true
+                }
+            }
+        }
+        if (success) return true
+
+        // B. Tenta iframes específicos do player EmbedPlay/Upns
+        doc.select("iframe[src]").forEach { iframe ->
+            val src = iframe.attr("src")
+            if (src.isNotBlank()) {
+                val lowerSrc = src.lowercase()
+                if (lowerSrc.contains("embedplay.upns.pro") || 
+                    lowerSrc.contains("embedplay.upn.one") ||
+                    lowerSrc.contains("embedplay.upns.ink")) {
+                    if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
+                        success = true
+                    }
+                }
+            }
+        }
+        if (success) return true
+
+        // C. Tenta qualquer iframe que pareça ser um player de vídeo
+        doc.select("iframe[src]").forEach { iframe ->
+            val src = iframe.attr("src")
+            if (src.isNotBlank()) {
+                val lowerSrc = src.lowercase()
+                if (lowerSrc.contains("player") || lowerSrc.contains("video")) {
+                    if (loadExtractor(src, finalUrl, subtitleCallback, callback)) {
+                        success = true
+                    }
+                }
+            }
+        }
+        if (success) return true
+
+        // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
+        // VERIFICAÇÃO SIMPLIFICADA SEM USAR OPERADOR 'in'
+        val shouldUseWebView = html.contains("apiblogger.click", ignoreCase = true) ||
+                              finalUrl.contains("episodio/", ignoreCase = true)
+        
+        if (shouldUseWebView) {
+            try {
+                val resolver = WebViewResolver(html)
+                val (mainRequest, subRequests) = resolver.resolveUsingWebView(finalUrl)
+
+                // Processa a requisição principal
+                mainRequest?.url?.toString()?.let { url ->
+                    if (url.contains(".m3u8", ignoreCase = true) || 
+                        url.contains(".mp4", ignoreCase = true)) {
+                        loadExtractor(url, finalUrl, subtitleCallback, callback)
+                    }
+                }
+
+                // Processa requisições secundárias
+                subRequests.forEach { req ->
+                    req.url?.toString()?.let { url ->
+                        if (url.contains(".m3u8", ignoreCase = true) || 
+                            url.contains(".mp4", ignoreCase = true)) {
+                            loadExtractor(url, finalUrl, subtitleCallback, callback)
+                        }
+                    }
+                }
+
+                return true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Continua para outros métodos se o WebView falhar
+            }
+        }
+
+        // ========== 4. TENTATIVA FINAL: BUSCA POR LINKS M3U8/MP4 DIRETAMENTE ==========
+        val m3u8Pattern = Regex("""(https?://[^"\s]+\.m3u8[^"\s]*)""", RegexOption.IGNORE_CASE)
+        val mp4Pattern = Regex("""(https?://[^"\s]+\.mp4[^"\s]*)""", RegexOption.IGNORE_CASE)
+        
+        m3u8Pattern.findAll(html).forEach { match ->
+            val url = match.value
+            if (loadExtractor(url, finalUrl, subtitleCallback, callback)) {
+                success = true
+            }
+        }
+        
+        mp4Pattern.findAll(html).forEach { match ->
+            val url = match.value
+            if (loadExtractor(url, finalUrl, subtitleCallback, callback)) {
+                success = true
+            }
+        }
+
+        return success
+
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return false
     }
 }
-            return false
 
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return false
-        }
+// Função auxiliar para carregar extratores (mantenha esta se já existir)
+private suspend fun loadExtractor(
+    url: String, 
+    referer: String, 
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    return try {
+        // Sua lógica de extração aqui
+        // Retorna true se encontrou um link válido
+        false // substitua por sua lógica real
+    } catch (e: Exception) {
+        false
     }
-
-// ... (Resto da classe UltraCine) ...
-
-
+}
     // Função auxiliar para extrair qualidade (mantém a mesma)
     private fun extractQualityFromUrl(url: String): Int {
         val qualityPattern = Regex("""/(\d+)p?/""")
