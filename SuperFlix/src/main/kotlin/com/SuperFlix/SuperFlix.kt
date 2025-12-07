@@ -80,7 +80,7 @@ class SuperFlix : MainAPI() {
             }
         }
         
-        val response = app.get(url, headers = defaultHeaders)
+        val response = app.get(url, isBrowser = true) 
         val document = response.document
 
         val list = document.select("a.card").mapNotNull { it.toSearchResponse() }
