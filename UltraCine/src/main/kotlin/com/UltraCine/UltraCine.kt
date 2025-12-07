@@ -171,12 +171,12 @@ class UltraCine : MainAPI() {
             val res = app.get(finalUrl, referer = mainUrl)
             val html = res.text
 
-            // EPISÓDIOS: WEBVIEW PRIMEIRO (pra pular ads e ativar JW Player)
             if (isEpisode) {
+                // WEBVIEW PARA EPISÓDIOS (pula ads e ativa JW Player)
                 WebViewResolver(res.text).resolveUsingWebView(res.url) { link ->
                     if (link.isNotBlank() && 
                         (link.contains(".mp4") || link.contains(".m3u8") || link.contains("googlevideo.com")) &&
-                        !link.contains("banner") && !link.contains("ads")
+                        link.indexOf("banner") == -1 && link.indexOf("ads") == -1
                     ) {
                         val quality = when {
                             link.contains("360p") -> 360
@@ -186,27 +186,24 @@ class UltraCine : MainAPI() {
                             else -> Qualities.Unknown.value
                         }
 
-                        callback.invoke(
-                            ExtractorLink(
-                                source = name,
-                                name = "\( name ( \){quality}p)",
-                                url = link,
-                                referer = finalUrl,
-                                quality = quality,
-                                isM3u8 = link.contains(".m3u8")
-                            )
-                        )
+                        newExtractorLink(
+                            source = name,
+                            name = "\( name ( \){quality}p)",
+                            url = link,
+                            referer = finalUrl,
+                            quality = quality,
+                            isM3u8 = link.contains(".m3u8")
+                        ).let { callback(it) }
                     }
                 }
-                delay(10000) // Tempo pra WebView simular skip ad + play/pause
-                return true // Deixa o CloudStream esperar o WebView
+                delay(10000) // Tempo pra WebView simular skip + play
+                return true
             }
 
-            // FILMES: REGEX RÁPIDO (mantém o que já funciona)
-            // JW Player
+            // FILMES: REGEX RÁPIDO
             Regex("""<video[^>]+class=["'][^"']*jw[^"']*["'][^>]+src=["'](https?://[^"']+\.mp4[^"']*)["']""")
                 .find(html)?.groupValues?.get(1)?.let { url ->
-                    if (!url.contains("banner") && !url.contains("ads")) {
+                    if (url.indexOf("banner") == -1 && url.indexOf("ads") == -1) {
                         val quality = when {
                             url.contains("360p") -> 360
                             url.contains("480p") -> 480
@@ -214,9 +211,14 @@ class UltraCine : MainAPI() {
                             url.contains("1080p") -> 1080
                             else -> Qualities.Unknown.value
                         }
-                        callback.invoke(
-                            ExtractorLink(name, "\( name ( \){quality}p)", url, finalUrl, quality, false)
-                        )
+                        newExtractorLink(
+                            source = name,
+                            name = "\( name ( \){quality}p)",
+                            url = url,
+                            referer = finalUrl,
+                            quality = quality,
+                            isM3u8 = false
+                        ).let { callback(it) }
                         return true
                     }
                 }
@@ -224,15 +226,20 @@ class UltraCine : MainAPI() {
             // MP4 genérico
             Regex("""(https?://[^"']+\.mp4[^"']*)""").findAll(html).forEach { match ->
                 val url = match.value
-                if (url.length > 50 && !url.contains("banner") && !url.contains("ads")) {
-                    callback.invoke(
-                        ExtractorLink(name, name, url, finalUrl, Qualities.Unknown.value, false)
-                    )
+                if (url.length > 50 && url.indexOf("banner") == -1 && url.indexOf("ads") == -1) {
+                    newExtractorLink(
+                        source = name,
+                        name = name,
+                        url = url,
+                        referer = finalUrl,
+                        quality = Qualities.Unknown.value,
+                        isM3u8 = false
+                    ).let { callback(it) }
                     return true
                 }
             }
 
-            // Iframes (EmbedPlay antigo)
+            // Iframes
             res.document.select("iframe").forEach { iframe ->
                 val src = iframe.attr("src")
                 if (src.isNotBlank() && loadExtractor(src, finalUrl, subtitleCallback, callback)) return true
@@ -241,7 +248,7 @@ class UltraCine : MainAPI() {
             return false
         } catch (e: Exception) {
             e.printStackTrace()
-            return isEpisode // Episódios sempre tentam WebView
+            return isEpisode
         }
     }
 }
