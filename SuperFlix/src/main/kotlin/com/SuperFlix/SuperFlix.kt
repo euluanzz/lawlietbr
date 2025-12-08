@@ -283,7 +283,7 @@ class SuperFlix : MainAPI() {
         println("SuperFlix: Extraindo vídeo do Fembed ID: $videoId")
         
         // URL 1: Direto da API do Fembed
-        val apiUrl = "https://fembed.sx/api.php"
+        val apiUrl = "https://fembed.sx/api/source/$videoId"
         
         println("SuperFlix: API URL: $apiUrl")
         
@@ -297,14 +297,11 @@ class SuperFlix : MainAPI() {
             "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8"
         )
         
-        // PASSO 1: Tentar método direto
-        println("SuperFlix: === PASSO 1: Método direto ===")
-        
-        val directUrl = "https://fembed.sx/api/source/$videoId"
-        println("SuperFlix: Tentando URL direta: $directUrl")
+        // PASSO 1: Tentar método direto da API
+        println("SuperFlix: === PASSO 1: Método direto da API ===")
         
         try {
-            val response = app.post(directUrl, headers = headers, data = emptyMap())
+            val response = app.post(apiUrl, headers = headers, data = emptyMap())
             println("SuperFlix: Status code: ${response.code}")
             
             if (response.isSuccessful) {
@@ -315,7 +312,7 @@ class SuperFlix : MainAPI() {
                 // Tentar parsear como JSON
                 val json = response.parsedSafe<Map<String, Any>>()
                 if (json != null) {
-                    println("SuperFlix: JSON parseado: ${json.keys}")
+                    println("SuperFlix: JSON parseado com ${json.size} chaves: ${json.keys}")
                     
                     // Verificar se tem dados
                     if (json.containsKey("data")) {
@@ -330,10 +327,10 @@ class SuperFlix : MainAPI() {
                                     val label = item["label"] as? String
                                     
                                     if (file != null && file.isNotBlank()) {
-                                        println("SuperFlix: Link encontrado: $label -> $file")
+                                        println("SuperFlix: Link encontrado: $label -> ${file.take(100)}...")
                                         
                                         if (testUrl(file)) {
-                                            println("SuperFlix: ✅ URL funciona: $file")
+                                            println("SuperFlix: ✅ URL funciona: ${file.take(100)}...")
                                             addVideoLink(file, label ?: "Desconhecido", "https://fembed.sx/", callback)
                                             return true
                                         }
@@ -342,20 +339,27 @@ class SuperFlix : MainAPI() {
                             }
                         }
                     }
+                    
+                    // Verificar se tem success e é falso
+                    if (json.containsKey("success") && json["success"] == false) {
+                        println("SuperFlix: API retornou success=false")
+                    }
+                } else {
+                    println("SuperFlix: Não consegui parsear JSON")
                 }
+            } else {
+                println("SuperFlix: API falhou com código ${response.code}")
+                println("SuperFlix: Mensagem: ${response.text}")
             }
         } catch (e: Exception) {
             println("SuperFlix: Erro método direto: ${e.message}")
         }
         
-        // PASSO 2: Tentar método com iframe (baseado no log)
-        println("SuperFlix: === PASSO 2: Método iframe ===")
+        // PASSO 2: Tentar método alternativo com player
+        println("SuperFlix: === PASSO 2: Método player alternativo ===")
         
-        // O log mostra que a API retorna um iframe como:
-        // <iframe src="/api.php?action=getAds&s=1441563&c=&key=0&lang=DUB" ...
-        
-        val iframeData = mapOf(
-            "action" to "getAds",
+        val playerUrl = "https://fembed.sx/api.php"
+        val playerData = mapOf(
             "s" to videoId,
             "c" to "",
             "key" to Base64.getEncoder().encodeToString("0".toByteArray()),
@@ -363,40 +367,50 @@ class SuperFlix : MainAPI() {
         )
         
         try {
-            println("SuperFlix: Enviando POST para: $apiUrl")
-            println("SuperFlix: Dados iframe: $iframeData")
-            
-            val response = app.post(apiUrl, headers = headers, data = iframeData)
-            println("SuperFlix: Status iframe: ${response.code}")
+            val response = app.post(playerUrl, headers = headers, data = playerData)
+            println("SuperFlix: Status player: ${response.code}")
             
             if (response.isSuccessful) {
                 val responseText = response.text
-                println("SuperFlix: Resposta iframe (${responseText.length} chars)")
+                println("SuperFlix: Resposta player (${responseText.length} chars)")
                 println("SuperFlix: Primeiros 500 chars: ${responseText.take(500)}")
                 
-                // Procurar por conteúdo real dentro do iframe
-                val content = extractContentFromResponse(responseText)
-                if (content.isNotBlank()) {
-                    println("SuperFlix: Conteúdo extraído: ${content.take(200)}")
+                // Procurar por URLs m3u8 na resposta
+                val m3u8Url = findRealM3u8Url(responseText)
+                if (m3u8Url != null && testUrl(m3u8Url)) {
+                    println("SuperFlix: ✅ URL encontrada via player: $m3u8Url")
+                    addVideoLink(m3u8Url, "Dublado", "https://fembed.sx/", callback)
+                    return true
+                }
+                
+                // Verificar se tem iframe e extrair conteúdo
+                val iframeSrc = extractIframeSrc(responseText)
+                if (iframeSrc != null) {
+                    println("SuperFlix: Iframe encontrado: $iframeSrc")
                     
-                    // Procurar por URLs m3u8
-                    val m3u8Url = findRealM3u8Url(content)
-                    if (m3u8Url != null && testUrl(m3u8Url)) {
-                        println("SuperFlix: ✅ URL encontrada via iframe: $m3u8Url")
-                        addVideoLink(m3u8Url, "Dublado", "https://fembed.sx/", callback)
-                        return true
+                    // Acessar conteúdo do iframe
+                    val iframeResponse = app.get(iframeSrc, headers = headers)
+                    if (iframeResponse.isSuccessful) {
+                        val iframeContent = iframeResponse.text
+                        println("SuperFlix: Conteúdo iframe (${iframeContent.length} chars)")
+                        
+                        val m3u8FromIframe = findRealM3u8Url(iframeContent)
+                        if (m3u8FromIframe != null && testUrl(m3u8FromIframe)) {
+                            println("SuperFlix: ✅ URL encontrada no iframe: $m3u8FromIframe")
+                            addVideoLink(m3u8FromIframe, "Dublado", "https://fembed.sx/", callback)
+                            return true
+                        }
                     }
                 }
             }
         } catch (e: Exception) {
-            println("SuperFlix: Erro método iframe: ${e.message}")
+            println("SuperFlix: Erro método player: ${e.message}")
         }
         
-        // PASSO 3: Tentar outras linguagens
+        // PASSO 3: Tentar Legendado
         println("SuperFlix: === PASSO 3: Tentando Legendado ===")
         
-        val iframeDataSub = mapOf(
-            "action" to "getAds",
+        val playerDataSub = mapOf(
             "s" to videoId,
             "c" to "",
             "key" to Base64.getEncoder().encodeToString("0".toByteArray()),
@@ -404,27 +418,24 @@ class SuperFlix : MainAPI() {
         )
         
         try {
-            val response = app.post(apiUrl, headers = headers, data = iframeDataSub)
+            val response = app.post(playerUrl, headers = headers, data = playerDataSub)
             println("SuperFlix: Status legendado: ${response.code}")
             
             if (response.isSuccessful) {
                 val responseText = response.text
-                val content = extractContentFromResponse(responseText)
-                if (content.isNotBlank()) {
-                    val m3u8Url = findRealM3u8Url(content)
-                    if (m3u8Url != null && testUrl(m3u8Url)) {
-                        println("SuperFlix: ✅ URL legendada encontrada: $m3u8Url")
-                        addVideoLink(m3u8Url, "Legendado", "https://fembed.sx/", callback)
-                        return true
-                    }
+                val m3u8Url = findRealM3u8Url(responseText)
+                if (m3u8Url != null && testUrl(m3u8Url)) {
+                    println("SuperFlix: ✅ URL legendada encontrada: $m3u8Url")
+                    addVideoLink(m3u8Url, "Legendado", "https://fembed.sx/", callback)
+                    return true
                 }
             }
         } catch (e: Exception) {
             println("SuperFlix: Erro legendado: ${e.message}")
         }
         
-        // PASSO 4: Tentar acesso à página e extrair player
-        println("SuperFlix: === PASSO 4: Extrair da página ===")
+        // PASSO 4: Tentar acesso à página e extrair player via JavaScript
+        println("SuperFlix: === PASSO 4: Extrair da página HTML ===")
         
         val pageUrl = "https://fembed.sx/e/$videoId"
         println("SuperFlix: Acessando página: $pageUrl")
@@ -442,42 +453,35 @@ class SuperFlix : MainAPI() {
                 val pageHtml = pageResponse.text
                 println("SuperFlix: Página obtida (${pageHtml.length} chars)")
                 
-                // Procurar por script com dados do player
-                val scriptPattern = Regex("""<script[^>]*>([^<]*)</script>""", RegexOption.DOT_MATCHES_ALL)
+                // Procurar por URLs m3u8 diretamente no HTML
+                val m3u8Url = findRealM3u8Url(pageHtml)
+                if (m3u8Url != null && testUrl(m3u8Url)) {
+                    println("SuperFlix: ✅ URL encontrada no HTML: $m3u8Url")
+                    addVideoLink(m3u8Url, "HTML", "https://fembed.sx/", callback)
+                    return true
+                }
+                
+                // Procurar por script com dados
+                val scriptPattern = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
                 val scripts = scriptPattern.findAll(pageHtml)
                 
                 for (match in scripts) {
                     val script = match.groupValues[1]
-                    if (script.contains("player_data") || script.contains("sources") || script.contains("m3u8")) {
-                        println("SuperFlix: Script encontrado com dados do player")
+                    if (script.contains("sources") || script.contains("file") || script.contains("m3u8")) {
+                        println("SuperFlix: Script potencial encontrado")
                         
-                        // Extrair JSON do script
-                        val jsonMatch = Regex("""(\{.*"sources".*\})""").find(script)
-                        if (jsonMatch != null) {
-                            val jsonStr = jsonMatch.groupValues[1]
-                            println("SuperFlix: JSON encontrado: ${jsonStr.take(200)}")
+                        // Extrair qualquer coisa que pareça URL
+                        val urlPattern = Regex("""https?://[^"'\s]+\.m3u8[^"'\s]*""")
+                        val urls = urlPattern.findAll(script)
+                        
+                        for (urlMatch in urls) {
+                            val url = urlMatch.value
+                            println("SuperFlix: URL encontrada no script: $url")
                             
-                            try {
-                                val json = app.parseJson<Map<String, Any>>(jsonStr)
-                                if (json.containsKey("sources")) {
-                                    val sources = json["sources"] as? List<Map<String, String>>
-                                    if (sources != null) {
-                                        for (source in sources) {
-                                            val file = source["file"]
-                                            val type = source["type"] ?: ""
-                                            
-                                            if (file != null && file.contains("m3u8")) {
-                                                println("SuperFlix: M3U8 encontrado: $file")
-                                                if (testUrl(file)) {
-                                                    addVideoLink(file, type, "https://fembed.sx/", callback)
-                                                    return true
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                println("SuperFlix: Erro ao parsear JSON: ${e.message}")
+                            if (testUrl(url)) {
+                                println("SuperFlix: ✅ URL do script funciona: $url")
+                                addVideoLink(url, "Script", "https://fembed.sx/", callback)
+                                return true
                             }
                         }
                     }
@@ -487,34 +491,85 @@ class SuperFlix : MainAPI() {
             println("SuperFlix: Erro ao acessar página: ${e.message}")
         }
         
-        // PASSO 5: Tentar URLs padrão
-        println("SuperFlix: === PASSO 5: URLs padrão ===")
+        // PASSO 5: Tentar URLs padrão conhecidas
+        println("SuperFlix: === PASSO 5: URLs padrão conhecidas ===")
         
-        // Tentar construir URL baseada no padrão comum
+        // Domínios conhecidos do Fembed
         val defaultDomains = listOf(
             "https://be6721.rcr72.waw04.i8yz83pn.com",
             "https://be6721.rcr72.waw04.cdn123.com",
-            "https://be6721.rcr72.waw04.streamsb.net"
+            "https://be6721.rcr72.waw04.streamsb.net",
+            "https://fcdn.stream",
+            "https://embedsb.com",
+            "https://sbembed.com"
         )
         
-        // Gerar hash baseado no ID
-        val hash = generateHashFromId(videoId)
-        println("SuperFlix: Hash gerado: $hash")
+        // Padrões de URL conhecidos
+        val urlPatterns = listOf(
+            "/hls2/03/10382/{hash}_h/master.m3u8",
+            "/hls2/{hash}/master.m3u8",
+            "/hls/{videoId}/master.m3u8",
+            "/v/{videoId}.m3u8",
+            "/api/source/{videoId}"
+        )
+        
+        // Parâmetros conhecidos
+        val params = "?t=0oy5UBzU4ee3_2k_o0hqL6xJb_0x8YqlZR4n6PvCU&s=1765199884&e=10800&f=51912396&srv=1060&asn=52601&sp=4000&p=GET"
         
         for (domain in defaultDomains) {
-            val testUrl1 = "$domain/hls2/03/10382/${hash}_h/master.m3u8?t=0oy5UBzU4ee3_2k_o0hqL6xJb_0x8YqlZR4n6PvCU&s=1765199884&e=10800&f=51912396&srv=1060&asn=52601&sp=4000&p=GET"
-            val testUrl2 = "$domain/hls2/$hash/master.m3u8?t=${System.currentTimeMillis()}"
-            val testUrl3 = "$domain/hls/$videoId/master.m3u8"
-            
-            val testUrls = listOf(testUrl1, testUrl2, testUrl3)
-            
-            for (url in testUrls) {
-                println("SuperFlix: Testando URL padrão: $url")
-                if (testUrl(url)) {
-                    println("SuperFlix: ✅ URL padrão funciona: $url")
-                    addVideoLink(url, "Padrão", domain, callback)
+            for (pattern in urlPatterns) {
+                val testUrl = if (pattern.contains("{hash}")) {
+                    val hash = generateHashFromId(videoId)
+                    "$domain${pattern.replace("{hash}", hash)}$params"
+                } else if (pattern.contains("{videoId}")) {
+                    "$domain${pattern.replace("{videoId}", videoId)}"
+                } else {
+                    "$domain$pattern"
+                }
+                
+                println("SuperFlix: Testando URL padrão: ${testUrl.take(100)}...")
+                if (testUrl(testUrl)) {
+                    println("SuperFlix: ✅ URL padrão funciona!")
+                    addVideoLink(testUrl, "Padrão", domain, callback)
                     return true
                 }
+            }
+        }
+        
+        // PASSO 6: Último recurso - usar API pública conhecida
+        println("SuperFlix: === PASSO 6: API pública ===")
+        
+        val publicApis = listOf(
+            "https://fembed-hd.com/api/source/$videoId",
+            "https://www.fembed.com/api/source/$videoId",
+            "https://fembed.net/api/source/$videoId"
+        )
+        
+        for (api in publicApis) {
+            try {
+                println("SuperFlix: Tentando API pública: $api")
+                val response = app.post(api, headers = headers, data = emptyMap())
+                
+                if (response.isSuccessful) {
+                    val json = response.parsedSafe<Map<String, Any>>()
+                    if (json != null && json.containsKey("data")) {
+                        val data = json["data"] as? List<Map<String, String>>
+                        if (data != null) {
+                            for (item in data) {
+                                val file = item["file"]
+                                val label = item["label"] ?: "Desconhecido"
+                                
+                                if (file != null && testUrl(file)) {
+                                    println("SuperFlix: ✅ URL da API pública funciona!")
+                                    addVideoLink(file, label, api, callback)
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("SuperFlix: Erro API pública $api: ${e.message}")
             }
         }
         
@@ -522,47 +577,22 @@ class SuperFlix : MainAPI() {
         return false
     }
 
-    private fun extractContentFromResponse(text: String): String {
-        // Extrair conteúdo real do iframe/script
-        println("SuperFlix: Extraindo conteúdo da resposta...")
-        
-        // Verificar se é HTML com iframe
-        if (text.contains("<iframe")) {
-            println("SuperFlix: Resposta contém iframe")
-            
-            // Extrair src do iframe
-            val srcMatch = Regex("""src=["']([^"']+)["']""").find(text)
-            if (srcMatch != null) {
-                val src = srcMatch.groupValues[1]
-                println("SuperFlix: SRC do iframe: $src")
-                
-                // Se for URL relativa, completar
-                if (src.startsWith("/")) {
-                    return "https://fembed.sx$src"
-                }
-                return src
-            }
-        }
-        
-        // Verificar se tem URLs m3u8 diretamente
-        val m3u8Match = findRealM3u8Url(text)
-        if (m3u8Match != null) {
-            println("SuperFlix: M3U8 encontrado diretamente")
-            return m3u8Match
-        }
-        
-        return text
+    private fun extractIframeSrc(html: String): String? {
+        val pattern = Regex("""<iframe[^>]+src=["']([^"']+)["']""")
+        val match = pattern.find(html)
+        return match?.groupValues?.get(1)
     }
 
     private fun findRealM3u8Url(text: String): String? {
         // Procurar por padrões de URL m3u8
         val patterns = listOf(
-            Regex("""https?://[^"'\s]+\.m3u8[^"'\s]*"""),
+            Regex("""https?://[^"'\s]+\.m3u8\?[^"'\s]*"""),
             Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']"""),
             Regex("""(https?://[a-z0-9]+\.rcr\d+\.[a-z]+\d+\.[a-z0-9]+\.com/[^"'\s]+\.m3u8[^"'\s]*)"""),
             Regex("""file["'\s]*:["'\s]*(https?://[^"'\s]+\.m3u8[^"'\s]*)"""),
             Regex("""src["'\s]*:["'\s]*(https?://[^"'\s]+\.m3u8[^"'\s]*)"""),
-            Regex("""url["'\s]*:["'\s]*(https?://[^"'\s]+\.m3u8[^"'\s]*)""")
+            Regex("""url["'\s]*:["'\s]*(https?://[^"'\s]+\.m3u8[^"'\s]*)"""),
+            Regex("""sources["'\s]*:["'\s]*\[[^\]]*"([^"]+\.m3u8[^"]*)"[^\]]*\]""")
         )
         
         for (pattern in patterns) {
@@ -572,7 +602,7 @@ class SuperFlix : MainAPI() {
                 url = url.trim()
                 
                 if (url.isNotBlank() && url.contains(".m3u8")) {
-                    println("SuperFlix: URL encontrada via padrão: $url")
+                    println("SuperFlix: URL encontrada via padrão: ${url.take(100)}...")
                     return url
                 }
             }
@@ -591,20 +621,18 @@ class SuperFlix : MainAPI() {
                 "Referer" to "https://fembed.sx/"
             )
             
-            val response = app.get(url, headers = testHeaders, allowRedirects = true)
+            val response = app.get(url, headers = testHeaders, allowRedirects = true, timeout = 10)
             println("SuperFlix: Teste HTTP: ${response.code}")
             
             if (response.isSuccessful) {
                 val content = response.text
-                println("SuperFlix: Conteúdo (primeiros 200 chars): ${content.take(200)}")
-                
                 // Verificar se é um m3u8 válido
                 if (content.contains("#EXTM3U")) {
-                    println("SuperFlix: ✅ M3U8 válido")
+                    println("SuperFlix: ✅ M3U8 válido (tem EXTM3U)")
                     return true
-                } else if (content.contains("http") && content.contains(".m3u8")) {
-                    // Pode ser uma resposta indireta
-                    println("SuperFlix: ⚠️ Resposta indireta, pode conter URL m3u8")
+                } else if (url.contains(".m3u8") && content.isNotBlank()) {
+                    // Mesmo sem EXTM3U, se a URL termina em .m3u8 e retorna algo, pode ser válido
+                    println("SuperFlix: ⚠️ URL .m3u8 retornou conteúdo mas sem EXTM3U")
                     return true
                 }
             }
@@ -651,8 +679,8 @@ class SuperFlix : MainAPI() {
 
     private fun generateHashFromId(videoId: String): String {
         // Gerar hash determinístico baseado no ID
-        val hash = (videoId.hashCode() and 0xfffffff).toString(16)
-        return hash.take(12).padEnd(12, '0')
+        val hashInt = videoId.hashCode() and 0xfffffff
+        return hashInt.toString(16).padStart(12, '0').take(12)
     }
 
     private data class JsonLdInfo(
