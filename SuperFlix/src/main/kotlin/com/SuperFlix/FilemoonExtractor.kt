@@ -36,7 +36,8 @@ class Filemoon : ExtractorApi() {
             "https://filemoon.in/e/$videoId"
         }
 
-        val apiUrl = "https://fembed.sx/api.php?s=$videoId&c="
+        // DEPOIS (usando o timestamp atual)
+val apiUrl= "https://fembed.sx/api.php?s=$videoId&c=${System.currentTimeMillis()}"
 
         try {
             // 2. FAZER GET INICIAL PARA OBTER COOKIES DE SESSÃO
