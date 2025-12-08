@@ -18,6 +18,12 @@ class Filemoon : ExtractorApi() {
     override val mainUrl = "https://filemoon.in"
     override val requiresReferer = true
 
+ // ESSENCIAL: Diz ao Cloudstream quais URLs este Extractor suporta
+    override fun isM3u8Supported(url: String): Boolean {
+        // Verifica se a URL contém qualquer um dos domínios suportados
+        return url.contains("filemoon.") || url.contains("fembed.") || url.contains("ico3c.")
+    }
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
