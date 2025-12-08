@@ -372,8 +372,8 @@ class SuperFlix : MainAPI() {
     if (isFilemoonUrl) {
         println("SuperFlix: loadLinks - Usando extractor Filemoon diretamente")
         try {
-            // Criar instância do Filemoon e usar diretamente
-            val filemoonExtractor = Filemoon()
+            // Importar a classe corretamente
+            val filemoonExtractor = com.lagradost.cloudstream3.extractors.Filemoon()
             filemoonExtractor.getUrl(
                 url = data,
                 referer = "https://fembed.sx/",
@@ -382,6 +382,7 @@ class SuperFlix : MainAPI() {
             )
             
             // Verificar se algum link foi adicionado
+            println("SuperFlix: loadLinks - Filemoon extractor executado com sucesso")
             return true
         } catch (e: Exception) {
             println("SuperFlix: loadLinks - ERRO ao usar Filemoon: ${e.message}")
