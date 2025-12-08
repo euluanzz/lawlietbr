@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
+import com.lagradost.cloudstream3.utils.ExtractorLink
 
 class SuperFlix : MainAPI() {
     override var mainUrl = "https://superflix21.lol"
