@@ -282,58 +282,57 @@ class SuperFlix : MainAPI() {
     }
 
     // 🔥🔥🔥 FUNÇÃO LOADLINKS CORRIGIDA 🔥🔥🔥
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        if (data.isBlank()) return false
-        
-        return try {
-            // 🔥 SE JÁ FOR LINK .m3u8 DIRETO (raro)
-            if (data.contains(".m3u8") && data.contains("rcr22")) {
-                val quality = extractQualityFromUrl(data)
-                val link = newExtractorLink(
-                    source = name,
-                    name = "$name (${quality}p)",
-                    url = data
-                ) {
-                    this.referer = mainUrl
-                    this.quality = quality
-                    this.isM3u8 = true
-                }
-                callback.invoke(link)
-                return true
-            }
-            
-            // 🔥🔥🔥 SOLUÇÃO PRINCIPAL: SE FOR URL DO FEMBED 🔥🔥🔥
-            if (data.contains("fembed.sx")) {
-                // DELEGA para o extractor do Fembed!
-                return loadExtractor(data, mainUrl, subtitleCallback, callback)
-            }
-            
-            // 🔥 SE FOR URL DO SUPERFLIX
-            val finalUrl = if (data.startsWith("http")) data else fixUrl(data)
-            val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
-            val doc = res.document
-            val html = res.text
-            
-            // Procurar URL do Fembed
-            val fembedUrl = findFembedUrlInPage(doc, html)
-            
-            if (fembedUrl != null) {
-                // 🔥 DELEGA para o extractor do Fembed!
-                return loadExtractor(fembedUrl, finalUrl, subtitleCallback, callback)
-            }
-            
-            false
-            
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
+  override suspend fun loadLinks(
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    if (data.isBlank()) return false
+    
+    return try {
+        // 🔥 SE JÁ FOR LINK .m3u8 DIRETO (raro)
+        if (data.contains(".m3u8") && data.contains("rcr22")) {
+            val quality = extractQualityFromUrl(data)
+            val link = newExtractorLink(
+                source = name,
+                name = "$name (${quality}p)",
+                url = data,
+                referer = mainUrl,
+                quality = quality,
+                isM3u8 = true
+            )
+            callback.invoke(link)
+            return true
         }
+        
+        // 🔥🔥🔥 SOLUÇÃO PRINCIPAL: SE FOR URL DO FEMBED 🔥🔥🔥
+        if (data.contains("fembed.sx")) {
+            // DELEGA para o extractor do Fembed!
+            return loadExtractor(data, mainUrl, subtitleCallback, callback)
+        }
+        
+        // 🔥 SE FOR URL DO SUPERFLIX
+        val finalUrl = if (data.startsWith("http")) data else fixUrl(data)
+        val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
+        val doc = res.document
+        val html = res.text
+        
+        // Procurar URL do Fembed
+        val fembedUrl = findFembedUrlInPage(doc, html)
+        
+        if (fembedUrl != null) {
+            // 🔥 DELEGA para o extractor do Fembed!
+            return loadExtractor(fembedUrl, finalUrl, subtitleCallback, callback)
+        }
+        
+        false
+        
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
     }
+}
     
     private fun findFembedUrlInPage(doc: org.jsoup.nodes.Document, html: String): String? {
         doc.select("button[data-url*='fembed']").forEach { button ->
