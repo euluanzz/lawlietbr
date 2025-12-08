@@ -20,217 +20,91 @@ class Filemoon : ExtractorApi() {
 
  // ESSENCIAL: Diz ao Cloudstream quais URLs este Extractor suporta
      
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        println("FilemoonExtractor: getUrl - INÍCIO")
-        println("FilemoonExtractor: URL recebida: $url")
-        println("FilemoonExtractor: Referer: $referer")
+    // FilemoonExtractor.kt - NOVO método getUrl
+
+override suspend fun getUrl(
+    url: String,
+    referer: String?,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+) {
+    println("FilemoonExtractor: getUrl - INÍCIO")
+    val videoId = extractVideoId(url)
+    if (videoId.isEmpty()) return
+
+    // 1. URLs
+    // A URL original do embed (ex: https://fembed.sx/e/1441563) é o REFERER
+    val playerEmbedUrl = if (url.contains("fembed.sx")) {
+        "https://fembed.sx/e/$videoId"
+    } else {
+        "https://filemoon.in/e/$videoId"
+    }
+    
+    // O endpoint da API (ex: https://fembed.sx/api.php?s=1441563&c=)
+    // O Filemoon/Fembed usa o mesmo ID no 's' e no Referer
+    val apiUrl = "https://fembed.sx/api.php?s=$videoId&c="
+    val requestReferer = referer ?: "https://fembed.sx/" // Usa o referer do Cloudstream ou um default
+
+    println("FilemoonExtractor: POST API URL: $apiUrl")
+    println("FilemoonExtractor: POST Referer Header: $playerEmbedUrl")
+
+    try {
+        // 2. CORPO DA REQUISIÇÃO POST (Form Data)
+        // O JS que você viu envia: { action: 'getPlayer', lang: 'DUB', key: 'MA==' }
+        val body = mapOf(
+            "action" to "getPlayer",
+            // Nota: O idioma 'DUB' ou 'LEG' é definido pelo SuperFlix. 
+            // Para simplificar, vamos assumir DUB, mas você pode parametrizar isso se necessário.
+            "lang" to "DUB", 
+            "key" to "MA==" // Base64 de "0" (o primeiro servidor)
+        )
         
-        // Extrair ID do vídeo
-        val videoId = extractVideoId(url)
-        println("FilemoonExtractor: Video ID extraído: $videoId")
-        
-        if (videoId.isEmpty()) {
-            println("FilemoonExtractor: ERRO: Não consegui extrair ID da URL")
+        // 3. HEADERS para o POST
+        val postHeaders = getHeaders(apiUrl, playerEmbedUrl).toMutableMap()
+        postHeaders["Origin"] = playerEmbedUrl.substringBefore("/e/") // https://fembed.sx
+
+        println("FilemoonExtractor: Fazendo requisição POST para Player HTML")
+
+        // 4. Executar o POST
+        val response = app.post(
+            apiUrl, 
+            headers = postHeaders,
+            requestBody = body,
+            referer = playerEmbedUrl // Garantir que o app use o referer correto
+        )
+
+        if (!response.isSuccessful) {
+            println("FilemoonExtractor: ERRO: POST falhou com status ${response.code}")
             return
         }
+
+        val finalPlayerHtml = response.text
+        println("FilemoonExtractor: Player HTML obtido (${finalPlayerHtml.length} chars)")
         
-        try {
-            // Se for URL do fembed, converter para filemoon
-            val processedUrl = if (url.contains("fembed.sx")) {
-                "https://filemoon.in/e/$videoId"
-            } else {
-                url
-            }
-            
-            println("FilemoonExtractor: URL processada: $processedUrl")
-            
-            // Fazer requisição com headers
-            val headers = getHeaders(processedUrl, referer)
-            println("FilemoonExtractor: Headers usados: ${headers.keys}")
-            
-            println("FilemoonExtractor: Fazendo requisição GET para $processedUrl")
-            val response = app.get(processedUrl, headers = headers)
-            println("FilemoonExtractor: Status code: ${response.code}")
-            
-            if (!response.isSuccessful) {
-                println("FilemoonExtractor: ERRO: Requisição falhou com status ${response.code}")
-                return
-            }
-            
-            val playerResponse = response.text
-            println("FilemoonExtractor: Página carregada (${playerResponse.length} chars)")
-            println("FilemoonExtractor: Primeiros 500 chars da resposta:")
-            println(playerResponse.take(500))
-            
-            // Procurar iframe
-            val iframeRegex = Regex("""<iframe[^>]+src=["']([^"']+)["']""")
-            val iframeMatch = iframeRegex.find(playerResponse)
-            
-            if (iframeMatch != null) {
-                var iframeUrl = iframeMatch.groupValues[1]
-                println("FilemoonExtractor: Iframe encontrado: $iframeUrl")
-                
-                // Garantir que a URL do iframe seja completa
-                if (!iframeUrl.startsWith("http")) {
-                    iframeUrl = "https:$iframeUrl"
-                    println("FilemoonExtractor: Iframe URL corrigida: $iframeUrl")
-                }
-                
-                // Acessar o iframe
-                println("FilemoonExtractor: Acessando iframe: $iframeUrl")
-                val iframeHeaders = getHeaders(iframeUrl, processedUrl)
-                val iframeResponse = app.get(iframeUrl, headers = iframeHeaders)
-                
-                if (!iframeResponse.isSuccessful) {
-                    println("FilemoonExtractor: ERRO: Iframe falhou com status ${iframeResponse.code}")
-                    return
-                }
-                
-                val iframeHtml = iframeResponse.text
-                println("FilemoonExtractor: Iframe carregado (${iframeHtml.length} chars)")
-                println("FilemoonExtractor: Primeiros 500 chars do iframe:")
-                println(iframeHtml.take(500))
-                
-                // Procurar URL m3u8
-                val m3u8Url = extractM3u8Url(iframeHtml)
-                
-                if (m3u8Url != null) {
-                    println("FilemoonExtractor: M3U8 encontrado: $m3u8Url")
-                    
-                    // Extrair streams do m3u8
-                    println("FilemoonExtractor: Gerando streams M3U8...")
-                    val links = M3u8Helper.generateM3u8(
-                        source = name,
-                        streamUrl = m3u8Url,
-                        referer = iframeUrl,
-                        headers = getHeaders(m3u8Url, iframeUrl)
-                    )
-                    
-                    println("FilemoonExtractor: ${links.size} link(s) gerado(s)")
-                    links.forEachIndexed { index, link ->
-                        println("FilemoonExtractor: Link $index: ${link.name} - ${link.url.take(100)}...")
-                        callback(link)
-                    }
-                    
-                    println("FilemoonExtractor: SUCCESS: Links gerados com sucesso")
-                    return
-                } else {
-                    println("FilemoonExtractor: ERRO: Não encontrou URL M3U8 no iframe")
-                }
-            } else {
-                println("FilemoonExtractor: ERRO: Não encontrou iframe na página")
-            }
-            
-            // Tentar extrair URL m3u8 diretamente da página
-            println("FilemoonExtractor: Tentando extrair M3U8 diretamente da página principal")
-            val directM3u8 = extractM3u8Url(playerResponse)
-            if (directM3u8 != null) {
-                println("FilemoonExtractor: M3U8 encontrado diretamente: $directM3u8")
-                
-                val links = M3u8Helper.generateM3u8(
-                    source = name,
-                    streamUrl = directM3u8,
-                    referer = processedUrl,
-                    headers = getHeaders(directM3u8, processedUrl)
-                )
-                
-                println("FilemoonExtractor: ${links.size} link(s) gerado(s) diretamente")
-                links.forEach(callback)
-                return
-            }
-            
-            println("FilemoonExtractor: ERRO FINAL: Não consegui encontrar URL m3u8 em nenhum lugar")
-            println("FilemoonExtractor: Conteúdo HTML completo da página principal:")
-            println(playerResponse)
-            
-        } catch (e: Exception) {
-            println("FilemoonExtractor: EXCEÇÃO: ${e.message}")
-            println("FilemoonExtractor: Stack trace:")
-            e.printStackTrace()
+        // 5. Extrair M3U8 do HTML de resposta
+        val m3u8Url = extractM3u8Url(finalPlayerHtml)
+
+        if (m3u8Url != null) {
+            println("FilemoonExtractor: M3U8 FINAL encontrado: $m3u8Url")
+
+            // 6. Gerar Streams M3U8
+            val links = M3u8Helper.generateM3u8(
+                source = name,
+                streamUrl = m3u8Url,
+                // O referer para o M3U8 é a URL da API que o retornou, ou o playerEmbedUrl.
+                referer = playerEmbedUrl,
+                headers = getHeaders(m3u8Url, playerEmbedUrl)
+            )
+
+            println("FilemoonExtractor: ${links.size} link(s) gerado(s)")
+            links.forEach(callback)
+            return
+        } else {
+            println("FilemoonExtractor: ERRO: Não encontrou URL M3U8 no HTML FINAL do POST.")
         }
-    }
-    
-    private fun extractVideoId(url: String): String {
-        println("FilemoonExtractor: extractVideoId - URL: $url")
-        
-        // Extrair ID de diferentes formatos
-        val patterns = listOf(
-            Regex("""/e/(\d+)"""),            // /e/1421
-            Regex("""/v/([a-zA-Z0-9]+)"""),   // /v/abc123
-            Regex("""embed/([a-zA-Z0-9]+)""") // embed/abc123
-        )
-        
-        for ((index, pattern) in patterns.withIndex()) {
-            println("FilemoonExtractor: extractVideoId - Testando padrão $index: $pattern")
-            val match = pattern.find(url)
-            if (match != null && match.groupValues.size > 1) {
-                val id = match.groupValues[1]
-                println("FilemoonExtractor: extractVideoId - ID encontrado com padrão $index: $id")
-                return id
-            }
-        }
-        
-        // Fallback: último segmento
-        val fallbackId = url.substringAfterLast("/").substringBefore("?").substringBefore("-")
-        println("FilemoonExtractor: extractVideoId - Fallback ID: $fallbackId")
-        return fallbackId
-    }
-    
-    private fun extractM3u8Url(html: String): String? {
-        println("FilemoonExtractor: extractM3u8Url - Analisando HTML (${html.length} chars)")
-        
-        // Padrões para encontrar URLs m3u8
-        val patterns = listOf(
-            Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']"""),
-            Regex("""file\s*:\s*["']([^"']+\.m3u8[^"']*)["']"""),
-            Regex("""src\s*:\s*["']([^"']+\.m3u8[^"']*)["']"""),
-            Regex("""hls\s*:\s*["']([^"']+\.m3u8[^"']*)["']"""),
-            Regex("""(https://[^\s"']+\.m3u8[^\s"']*)""")
-        )
-        
-        for ((index, pattern) in patterns.withIndex()) {
-            println("FilemoonExtractor: extractM3u8Url - Testando padrão $index")
-            val matches = pattern.findAll(html)
-            var matchCount = 0
-            for (match in matches) {
-                matchCount++
-                val url = match.groupValues.getOrNull(1) ?: continue
-                println("FilemoonExtractor: extractM3u8Url - Match $matchCount do padrão $index: $url")
-                if (url.contains(".m3u8")) {
-                    println("FilemoonExtractor: extractM3u8Url - URL M3U8 encontrada com padrão $index")
-                    return url
-                }
-            }
-            println("FilemoonExtractor: extractM3u8Url - Padrão $index encontrou $matchCount matches")
-        }
-        
-        println("FilemoonExtractor: extractM3u8Url - Nenhum M3U8 encontrado")
-        return null
-    }
-    
-    private fun getHeaders(url: String, referer: String?): Map<String, String> {
-        val headers = mapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language" to "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding" to "gzip, deflate, br",
-            "Referer" to (referer ?: "https://fembed.sx/"),
-            "Origin" to "https://fembed.sx",
-            "Connection" to "keep-alive",
-            "Upgrade-Insecure-Requests" to "1",
-            "Cache-Control" to "max-age=0"
-        )
-        
-        println("FilemoonExtractor: getHeaders - Headers gerados para $url")
-        headers.forEach { (key, value) ->
-            println("  $key: $value")
-        }
-        
-        return headers
+
+    } catch (e: Exception) {
+        println("FilemoonExtractor: EXCEÇÃO: ${e.message}")
+        e.printStackTrace()
     }
 }
