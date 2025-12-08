@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 
+
 class SuperFlix : MainAPI() {
     override var mainUrl = "https://superflix21.lol"
     override var name = "SuperFlix"
@@ -386,17 +387,18 @@ class SuperFlix : MainAPI() {
                                     val quality = getQualityFromLabel(label ?: "Unknown")
                                     val isM3u8 = file.contains(".m3u8") || file.contains("master.m3u8")
 
-                                    // Usando newExtractorLink (não deprecated)
-                                    newExtractorLink(
-                                        url = file,
+                                    // ✅ CORREÇÃO AQUI: Usando ExtractorLink construtor
+                                    // O CloudStream usa versões diferentes, vamos usar o construtor básico
+                                    val link = ExtractorLink(
                                         source = name,
                                         name = label ?: "Fembed",
-                                        quality = quality.value,
+                                        url = file,
                                         referer = "$domain/",
+                                        quality = quality, // Já é Int
                                         isM3u8 = isM3u8
-                                    )?.let { link ->
-                                        callback.invoke(link)
-                                    }
+                                    )
+                                    
+                                    callback.invoke(link)
 
                                     println("SuperFlix DEBUG: Adicionado stream: $label - $file")
                                 }
@@ -438,27 +440,27 @@ class SuperFlix : MainAPI() {
         return null
     }
 
-    // Converter label para qualidade
-    private fun getQualityFromLabel(label: String): Qualities {
+    // ✅ CORREÇÃO AQUI: Converter label para Int (não Qualities)
+    private fun getQualityFromLabel(label: String): Int {
         return when {
-            label.contains("1080") || label.contains("FHD") -> Qualities.P1080
-            label.contains("720") || label.contains("HD") -> Qualities.P720
-            label.contains("480") -> Qualities.P480
-            label.contains("360") -> Qualities.P360
-            label.contains("240") -> Qualities.P240
-            label.contains("144") -> Qualities.P144
+            label.contains("1080") || label.contains("FHD") -> Qualities.P1080.value
+            label.contains("720") || label.contains("HD") -> Qualities.P720.value
+            label.contains("480") -> Qualities.P480.value
+            label.contains("360") -> Qualities.P360.value
+            label.contains("240") -> Qualities.P240.value
+            label.contains("144") -> Qualities.P144.value
             else -> {
                 // Tentar extrair número da qualidade
                 val numMatch = Regex("""(\d+)""").find(label)
                 numMatch?.groupValues?.get(1)?.toIntOrNull()?.let { num ->
                     when (num) {
-                        in 1080..2160 -> Qualities.P1080
-                        in 720..1079 -> Qualities.P720
-                        in 480..719 -> Qualities.P480
-                        in 360..479 -> Qualities.P360
-                        else -> Qualities.Unknown
+                        in 1080..2160 -> Qualities.P1080.value
+                        in 720..1079 -> Qualities.P720.value
+                        in 480..719 -> Qualities.P480.value
+                        in 360..479 -> Qualities.P360.value
+                        else -> Qualities.Unknown.value
                     }
-                } ?: Qualities.Unknown
+                } ?: Qualities.Unknown.value
             }
         }
     }
