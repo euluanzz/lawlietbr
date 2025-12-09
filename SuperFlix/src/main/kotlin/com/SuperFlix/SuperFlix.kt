@@ -256,6 +256,8 @@ class SuperFlix : MainAPI() {
     // ========== MÉTODOS ESPECIAIS PARA FILEMOON/ICO3C ==========
     // ========== MÉTODOS ESPECIAIS PARA FILEMOON/ICO3C ==========
 
+     // ========== MÉTODOS ESPECIAIS PARA FILEMOON/ICO3C ==========
+
     private suspend fun extractFilemoon(filemoonUrl: String): List<String> {
         val m3u8Urls = mutableListOf<String>()
         println("SuperFlix: extractFilemoon - Processando: $filemoonUrl")
@@ -309,13 +311,15 @@ class SuperFlix : MainAPI() {
             ).text
 
             // Passo 5: Analisar a resposta para o link final do .m3u8
-            val linkM3u8 = Regex("""https?://(?:be\d+|cdn\d+)\.[^\s"']*?\.m3u8\?[^\s"']*""").find(respostaTokenizada)?.value
+            // REGEX CORRIGIDO: Mais abrangente para capturar URLs de streaming.
+            val linkM3u8 = Regex("""https?://[^"']*?\.m3u8[^"']*""").find(respostaTokenizada)?.value
+
 
             if (!linkM3u8.isNullOrEmpty() && isValidStreamUrl(linkM3u8)) {
                 println("SuperFlix: extractFilemoon - Link M3U8 Final encontrado: $linkM3u8")
                 m3u8Urls.add(linkM3u8)
             } else {
-                println("SuperFlix: extractFilemoon - Link M3U8 não encontrado na resposta da API.")
+                println("SuperFlix: extractFilemoon - Link M3U8 não encontrado na resposta da API. (Resposta: ${respostaTokenizada.substring(0, minOf(200, respostaTokenizada.length))}...)")
             }
 
         } catch (e: Exception) {
