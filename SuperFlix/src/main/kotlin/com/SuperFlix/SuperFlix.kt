@@ -62,7 +62,7 @@ class SuperFlix : MainAPI() {
             val badge = this.selectFirst(".badge-kind")?.text()?.lowercase()
             val isSerie = when {
                 badge?.contains("série") == true -> true
-                badge?.contains("serie") == true -> true
+                badge?.contains("anime") == true -> true
                 badge?.contains("filme") == true -> false
                 url.contains("/serie/") -> true
                 else -> false
