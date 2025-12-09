@@ -20,7 +20,7 @@ class SuperFlix : MainAPI() {
     // "Primeira Exibição" como PRIMEIRA aba
     // =========================================================================
     override val mainPage = mainPageOf(
-        "$mainUrl/lancamentos" to "Primeira Exibição", // AGORA É A PRIMEIRA
+        "$mainUrl/lancamentos" to "Lançamentos", // AGORA É A PRIMEIRA
         "$mainUrl/filmes" to "Últimos Filmes",
         "$mainUrl/series" to "Últimas Séries"
     )
