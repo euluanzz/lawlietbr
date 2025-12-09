@@ -79,7 +79,8 @@ subprojects {
         implementation("com.google.code.gson:gson:2.11.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
         implementation("app.cash.quickjs:quickjs-android:0.9.2")
-        implementation("com.github.vidstige:jadb:v1.2.1")
+  implementation("com.lagradost:cloudstream-multimeta:1.0.1")
+      implementation("com.github.vidstige:jadb:v1.2.1")
     }
 }
 
