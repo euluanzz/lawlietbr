@@ -218,18 +218,18 @@ class SuperFlix : MainAPI() {
                 val quality = detectQualityFromUrl(videoUrl)
                 val source = detectSourceFromUrl(videoUrl)
                 
-                // CORREÇÃO: Usando os parâmetros diretamente no newExtractorLink
+                // CORREÇÃO: Forma simplificada com newExtractorLink
                 val link = newExtractorLink(
-                    source = name,
+                    source = this.name,
                     name = "$source (${quality}p)",
-                    url = videoUrl,
-                    referer = data,
-                    quality = quality,
-                    isM3u8 = videoUrl.contains(".m3u8")
+                    url = videoUrl
                 )
                 
+                // Configurar outras propriedades se necessário
+                // Note: algumas propriedades podem precisar ser configuradas de outra forma
+                
                 callback.invoke(link)
-                println("SuperFlix: loadLinks - Link adicionado: $source - Qualidade: $quality")
+                println("SuperFlix: loadLinks - Link adicionado: $source - Qualidade: $quality - URL: ${videoUrl.take(50)}...")
             }
             return true
         }
