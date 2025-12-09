@@ -209,8 +209,8 @@ class SuperFlix : MainAPI() {
                     TMDBRecommendation(
                         title = if (isTv) rec.name else rec.title,
                         posterUrl = rec.poster_path?.let { "$tmdbImageUrl/w500$it" },
-                        year = if (isTv) rec.first_air_date?.substring(0, 4)?.toIntOrNull()
-                              else rec.release_date?.substring(0, 4)?.toIntOrNull(),
+                        recYear = if (isTv) rec.first_air_date?.substring(0, 4)?.toIntOrNull()
+                                 else rec.release_date?.substring(0, 4)?.toIntOrNull(),
                         isMovie = !isTv
                     )
                 }
@@ -271,22 +271,23 @@ class SuperFlix : MainAPI() {
                     if (rec.isMovie) {
                         newMovieSearchResponse(rec.title ?: "", "") {
                             this.posterUrl = rec.posterUrl
-                            this.year = rec.year
+                            this.year = rec.recYear
                         }
                     } else {
                         newTvSeriesSearchResponse(rec.title ?: "", "") {
                             this.posterUrl = rec.posterUrl
-                            this.year = rec.year
+                            this.year = rec.recYear
                         }
                     }
                 }
             }
         } else {
-            // CORREÇÃO: Removido dataUrl não necessário
+            // CORREÇÃO: Usar a sobrecarga correta com dataUrl vazio
             newMovieLoadResponse(
                 name = tmdbInfo.title ?: "",
                 url = url,
-                type = TvType.Movie
+                type = TvType.Movie,
+                dataUrl = ""
             ) {
                 this.posterUrl = tmdbInfo.posterUrl
                 this.backgroundPosterUrl = tmdbInfo.backdropUrl
@@ -303,12 +304,12 @@ class SuperFlix : MainAPI() {
                     if (rec.isMovie) {
                         newMovieSearchResponse(rec.title ?: "", "") {
                             this.posterUrl = rec.posterUrl
-                            this.year = rec.year
+                            this.year = rec.recYear
                         }
                     } else {
                         newTvSeriesSearchResponse(rec.title ?: "", "") {
                             this.posterUrl = rec.posterUrl
-                            this.year = rec.year
+                            this.year = rec.recYear
                         }
                     }
                 }
@@ -346,8 +347,8 @@ class SuperFlix : MainAPI() {
                 this.tags = tags
             }
         } else {
-            // CORREÇÃO: Removido dataUrl não necessário
-            newMovieLoadResponse(title, url, TvType.Movie) {
+            // CORREÇÃO: Usar dataUrl vazio
+            newMovieLoadResponse(title, url, TvType.Movie, "") {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -395,7 +396,7 @@ class SuperFlix : MainAPI() {
     private data class TMDBRecommendation(
         val title: String?,
         val posterUrl: String?,
-        year: Int?,
+        val recYear: Int?, // CORREÇÃO: renomeado de 'year' para 'recYear'
         val isMovie: Boolean
     )
 
