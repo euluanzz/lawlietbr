@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.extractors.ExtractorApi // <<== IMPORTAÇÃO CORRIGIDA
 import kotlinx.coroutines.*
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -15,7 +16,7 @@ class SuperFlix : MainAPI() {
     override var lang = "pt-br"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
-    override val usesWebView = true
+    override val usesWebView = true // <<== ESSENCIAL PARA FEMBED/FILEMOON
 
     override val mainPage = mainPageOf(
         "$mainUrl/filmes" to "Filmes",
@@ -181,28 +182,22 @@ class SuperFlix : MainAPI() {
     }
 
     // =========================================================================
-    // FUNÇÃO loadLinks CORRIGIDA: Usa apenas o loadExtractor para forçar o WebView
+    // FUNÇÃO loadLinks CORRIGIDA
     // =========================================================================
-    // Nota: Dependendo da versão da sua biblioteca, a importação exata pode variar.
-
-override suspend fun loadLinks(
-    data: String,
-    isCasting: Boolean,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-): Boolean {
-    // Chamada correta:
-    return ExtractorApi.extract(data, subtitleCallback, callback)
-}
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        // Chamada correta:
+        return ExtractorApi.extract(data, subtitleCallback, callback)
+    }
 
 
     // =========================================================================
-    // FUNÇÕES DE RASPAGEM MANUAL REMOVIDAS (para forçar o uso de Extractor Padrão/WebView)
+    // FUNÇÕES DE RASPAGEM E UTILIDADE
     // =========================================================================
-    // O código abaixo foi removido para evitar a lógica de raspagem HTTP pura que estava falhando.
-
-    // private suspend fun extractFilemoon(filemoonUrl: String): List<String> { ... }
-    // private suspend fun tryDirectFembedApi(url: String): List<String> { ... }
 
     private fun extractFembedId(url: String): String? {
         val patterns = listOf(
@@ -260,15 +255,6 @@ override suspend fun loadLinks(
             "user-agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
             "X-Requested-With" to "XMLHttpRequest"
         )
-    }
-
-    private fun loadExtractor(
-        data: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        // Implementação mock (esta função deve ser substituída pela chamada real do ExtractorApi.extract)
-        return false 
     }
 
     private fun findPlayerUrl(document: org.jsoup.nodes.Document): String? {
