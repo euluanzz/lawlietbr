@@ -266,6 +266,7 @@ class SuperFlix : MainAPI() {
                 tmdbInfo.actors?.let { addActors(it) }
                 tmdbInfo.youtubeTrailer?.let { addTrailer(it) }
 
+                // CORREÇÃO: Criar recomendação sem suspensão
                 this.recommendations = tmdbInfo.recommendations?.map { rec ->
                     if (rec.isMovie) {
                         newMovieSearchResponse(rec.title ?: "", "") {
@@ -281,6 +282,7 @@ class SuperFlix : MainAPI() {
                 }
             }
         } else {
+            // CORREÇÃO: Removido dataUrl não necessário
             newMovieLoadResponse(
                 name = tmdbInfo.title ?: "",
                 url = url,
@@ -296,6 +298,7 @@ class SuperFlix : MainAPI() {
                 tmdbInfo.actors?.let { addActors(it) }
                 tmdbInfo.youtubeTrailer?.let { addTrailer(it) }
 
+                // CORREÇÃO: Criar recomendação sem suspensão
                 this.recommendations = tmdbInfo.recommendations?.map { rec ->
                     if (rec.isMovie) {
                         newMovieSearchResponse(rec.title ?: "", "") {
@@ -343,6 +346,7 @@ class SuperFlix : MainAPI() {
                 this.tags = tags
             }
         } else {
+            // CORREÇÃO: Removido dataUrl não necessário
             newMovieLoadResponse(title, url, TvType.Movie) {
                 this.posterUrl = poster
                 this.year = year
@@ -391,7 +395,7 @@ class SuperFlix : MainAPI() {
     private data class TMDBRecommendation(
         val title: String?,
         val posterUrl: String?,
-        val year: Int?,
+        year: Int?,
         val isMovie: Boolean
     )
 
