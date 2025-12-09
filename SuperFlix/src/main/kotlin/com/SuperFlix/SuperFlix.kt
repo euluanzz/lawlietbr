@@ -5,8 +5,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.SubtitleFile
 import org.jsoup.nodes.Element
 import com.fasterxml.jackson.annotation.JsonProperty
 
@@ -198,9 +196,9 @@ class SuperFlix : MainAPI() {
     }
 
     // =========================================================================
-    // CRIAR RESPOSTA COM TMDB
+    // CRIAR RESPOSTA COM TMDB (SUSPEND CORRIGIDO)
     // =========================================================================
-    private fun createLoadResponseWithTMDB(
+    private suspend fun createLoadResponseWithTMDB(
         tmdbInfo: TMDBInfo,
         url: String,
         document: org.jsoup.nodes.Document,
@@ -210,7 +208,7 @@ class SuperFlix : MainAPI() {
             val episodes = extractEpisodesFromButtons(document, url)
             
             newTvSeriesLoadResponse(
-                title = tmdbInfo.title ?: "",
+                name = tmdbInfo.title ?: "",
                 url = url,
                 type = TvType.TvSeries,
                 episodes = episodes
@@ -220,7 +218,8 @@ class SuperFlix : MainAPI() {
                 this.year = tmdbInfo.year
                 this.plot = tmdbInfo.overview
                 this.tags = tmdbInfo.genres
-                this.rating = tmdbInfo.rating
+                // Usando score em vez de rating (depreciado)
+                tmdbInfo.rating?.let { this.score = (it * 10).toInt() } // Converte 0-10 para 0-100
                 
                 tmdbInfo.actors?.let { addActors(it) }
                 tmdbInfo.youtubeTrailer?.let { addTrailer(it) }
@@ -243,17 +242,18 @@ class SuperFlix : MainAPI() {
             val playerUrl = findPlayerUrl(document)
             
             newMovieLoadResponse(
-                title = tmdbInfo.title ?: "",
+                name = tmdbInfo.title ?: "",
                 url = url,
                 type = TvType.Movie,
-                data = playerUrl ?: url
+                dataUrl = playerUrl ?: url
             ) {
                 this.posterUrl = tmdbInfo.posterUrl
                 this.backgroundPosterUrl = tmdbInfo.backdropUrl
                 this.year = tmdbInfo.year
                 this.plot = tmdbInfo.overview
                 this.tags = tmdbInfo.genres
-                this.rating = tmdbInfo.rating
+                // Usando score em vez de rating (depreciado)
+                tmdbInfo.rating?.let { this.score = (it * 10).toInt() } // Converte 0-10 para 0-100
                 this.duration = tmdbInfo.duration
                 
                 tmdbInfo.actors?.let { addActors(it) }
@@ -277,9 +277,9 @@ class SuperFlix : MainAPI() {
     }
 
     // =========================================================================
-    // FALLBACK: DADOS DO SITE
+    // FALLBACK: DADOS DO SITE (SUSPEND CORRIGIDO)
     // =========================================================================
-    private fun createLoadResponseFromSite(
+    private suspend fun createLoadResponseFromSite(
         document: org.jsoup.nodes.Document,
         url: String,
         title: String,
