@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper
 import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.fixUrl
 
 object SuperFlixExtractor {
 
@@ -50,33 +51,28 @@ object SuperFlixExtractor {
                 // Processamento da Mídia
                 if (intercepted.contains(".m3u8")) {
                     println("SFX Extractor DEBUG: URL é M3U8. Gerando links.")
-                    // Se for M3U8, usa o M3u8Helper
+                    // Se for M3U8, usa o M3u8Helper com a assinatura correta
                     M3u8Helper.generateM3u8(
                         source = name,
-                        url = intercepted,
+                        streamUrl = intercepted,
                         referer = url,
                         headers = headers
                     ).forEach(callback)
                 } else {
                     // Se for MP4/MKV direto
                     println("SFX Extractor DEBUG: URL é MP4/MKV direto. Retornando link.")
-                    val quality = if (intercepted.contains("1080p", true)) {
-                        Qualities.FullHDP.value
-                    } else if (intercepted.contains("720p", true)) {
-                        Qualities.HDP.value
-                    } else {
-                        Qualities.Unknown.value
-                    }
+                    val quality = extractQualityFromUrl(intercepted)
 
-                    // Corrigido: usando o construtor correto do ExtractorLink
+                    // Usando newExtractorLink (método recomendado)
                     callback.invoke(
-                        ExtractorLink(
+                        newExtractorLink(
                             source = name,
                             name = "SuperFlix",
-                            url = com.lagradost.cloudstream3.utils.fixUrl(intercepted),
+                            url = fixUrl(intercepted),
                             referer = url,
                             quality = quality,
-                            isM3u8 = false
+                            isM3u8 = false,
+                            headers = headers
                         )
                     )
                 }
@@ -90,6 +86,17 @@ object SuperFlixExtractor {
             println("SFX Extractor FALHA CRÍTICA: Erro durante a extração: ${e.message}")
             e.printStackTrace()
             false
+        }
+    }
+
+    // Função auxiliar para extrair qualidade da URL
+    private fun extractQualityFromUrl(url: String): Int {
+        return when {
+            url.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
+            url.contains("720p", ignoreCase = true) -> Qualities.P720.value
+            url.contains("480p", ignoreCase = true) -> Qualities.P480.value
+            url.contains("360p", ignoreCase = true) -> Qualities.P360.value
+            else -> Qualities.Unknown.value
         }
     }
 }
