@@ -1,9 +1,14 @@
 package com.SuperFlix
 
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.app
+import kotlinx.coroutines.*
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -14,7 +19,7 @@ class SuperFlix : MainAPI() {
     override var lang = "pt-br"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
-    override val usesWebView = true // ESSENCIAL para capturar requisições de rede
+    override val usesWebView = true
 
     override val mainPage = mainPageOf(
         "$mainUrl/filmes" to "Filmes",
@@ -87,7 +92,7 @@ class SuperFlix : MainAPI() {
         val poster = if (posterSrc.isNullOrBlank()) {
             posterDataSrc?.let { fixUrl(it) }
         } else {
-            fixUrl(posterSrc)
+            fixUrl(posterSrc ?: "")
         }
 
         val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
@@ -168,7 +173,6 @@ class SuperFlix : MainAPI() {
             val playerUrl = findPlayerUrl(document)
             println("SuperFlix: load - Player URL encontrada: $playerUrl")
 
-            // Passamos a URL do player para o loadLinks
             newMovieLoadResponse(title, url, TvType.Movie, playerUrl ?: url) {
                 this.posterUrl = poster
                 this.year = year
@@ -193,195 +197,256 @@ class SuperFlix : MainAPI() {
             return false
         }
 
-        // Método principal: Analisar a página para encontrar URLs .m3u8
-        println("SuperFlix: loadLinks - Analisando página para URLs .m3u8...")
-        
-        val m3u8Urls = findM3u8Urls(data)
-        println("SuperFlix: loadLinks - URLs .m3u8 encontradas: ${m3u8Urls.size}")
-        
-        for (m3u8Url in m3u8Urls) {
-            println("SuperFlix: loadLinks - URL encontrada: $m3u8Url")
+        // Abordagem DIRETA: Se for URL do Fembed, vamos SIMULAR UM NAVEGADOR
+        if (data.contains("fembed") || data.contains("filemoon")) {
+            println("SuperFlix: loadLinks - URL do Fembed detectada, usando método especial...")
             
-            val quality = extractQualityFromM3u8Url(m3u8Url)
-            println("SuperFlix: loadLinks - Qualidade detectada: $quality")
+            // Método 1: Tentar usar WebViewResolver (se disponível)
+            val m3u8Urls = tryWebViewResolver(data)
             
-            callback(
-                newExtractorLink(
-                    source = this.name,
-                    name = "SuperFlix HLS (${quality}p)",
-                    url = m3u8Url,
-                    type = ExtractorLinkType.M3U8
-                ) {
-                    this.referer = mainUrl
-                    this.headers = getHeaders()
-                    this.quality = quality
+            if (m3u8Urls.isNotEmpty()) {
+                println("SuperFlix: loadLinks - WebView encontrou ${m3u8Urls.size} URLs")
+                for (m3u8Url in m3u8Urls) {
+                    val quality = extractQualityFromUrl(m3u8Url)
+                    println("SuperFlix: loadLinks - Enviando URL: $m3u8Url (${quality}p)")
+                    
+                    callback(
+                        newExtractorLink(
+                            source = this.name,
+                            name = "SuperFlix HLS (${quality}p)",
+                            url = m3u8Url,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            this.referer = data
+                            this.headers = getHeaders()
+                            this.quality = quality
+                        }
+                    )
                 }
-            )
-        }
-        
-        // Se não encontrou URLs .m3u8, tentar usar extractor padrão
-        if (m3u8Urls.isEmpty()) {
-            println("SuperFlix: loadLinks - Nenhuma URL .m3u8 encontrada, tentando extractor padrão...")
+                return true
+            }
+            
+            // Método 2: Tentar usar API direta do Fembed (se conhecida)
+            println("SuperFlix: loadLinks - Tentando API direta do Fembed...")
+            val directUrls = tryDirectFembedApi(data)
+            if (directUrls.isNotEmpty()) {
+                for (directUrl in directUrls) {
+                    val quality = extractQualityFromUrl(directUrl)
+                    callback(
+                        newExtractorLink(
+                            source = this.name,
+                            name = "SuperFlix Direct (${quality}p)",
+                            url = directUrl,
+                            type = ExtractorLinkType.VIDEO
+                        ) {
+                            this.referer = data
+                            this.headers = getHeaders()
+                            this.quality = quality
+                        }
+                    )
+                }
+                return true
+            }
+            
+            // Método 3: Último recurso - usar extractor padrão
+            println("SuperFlix: loadLinks - Usando extractor padrão como último recurso...")
             return loadExtractor(data, subtitleCallback, callback)
         }
         
-        val success = m3u8Urls.isNotEmpty()
-        println("SuperFlix: loadLinks - FIM: ${if (success) "SUCESSO" else "FALHA"} (${m3u8Urls.size} links)")
-        return success
+        // Se não for Fembed, usar método normal
+        println("SuperFlix: loadLinks - URL não é do Fembed, usando análise normal...")
+        return loadExtractor(data, subtitleCallback, callback)
     }
 
-    // ========== MÉTODO PARA ENCONTRAR URLs .m3u8 ==========
+    // ========== MÉTODOS ESPECIAIS PARA Fembed ==========
 
-    private suspend fun findM3u8Urls(url: String): List<String> {
+    private suspend fun tryWebViewResolver(url: String): List<String> {
         val m3u8Urls = mutableListOf<String>()
         
         try {
-            println("SuperFlix: findM3u8Urls - Analisando: $url")
+            println("SuperFlix: tryWebViewResolver - Tentando carregar: $url")
             
-            // Obter HTML da página
+            // Tentar obter o HTML da página primeiro
             val document = app.get(url).document
             val html = document.html()
             
-            // Padrões para URLs .m3u8 (especialmente do tipo hls2)
+            // Procurar por padrões específicos que podem conter URLs
             val patterns = listOf(
-                // Padrão exato: https://be6721.rcr72.waw04.../hls2/.../master.m3u8
-                Regex("""https?://[^\s"']*?/hls2/[^\s"']*?/master\.m3u8[^\s"']*""", RegexOption.IGNORE_CASE),
-                
-                // Qualquer URL .m3u8 com parâmetros
-                Regex("""https?://[^\s"']*?\.m3u8\?[^\s"']*""", RegexOption.IGNORE_CASE),
-                
-                // URLs .m3u8 simples
-                Regex("""https?://[^\s"']*?\.m3u8[^\s"']*""", RegexOption.IGNORE_CASE),
-                
-                // URLs em atributos src, data-src, etc.
-                Regex("""(?:src|data-src|data-url|data-file)\s*=\s*["'](https?://[^"']*?\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
-                
-                // URLs em configurações de player JavaScript
-                Regex("""["'](?:file|url|source)["']\s*:\s*["'](https?://[^"']*?\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
-                
-                // Padrão específico para hls.js
-                Regex("""\.loadSource\s*\(\s*["'](https?://[^"']*?\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE)
+                Regex("""https?://[^\s"']*?/hls2/[^\s"']*?/master\.m3u8[^\s"']*"""),
+                Regex("""https?://[^\s"']*?\.m3u8\?[^\s"']*"""),
+                Regex("""["'](file|url|src)["']\s*:\s*["'](https?://[^"']*?\.m3u8[^"']*)["']"""),
+                Regex("""\.loadSource\s*\(\s*["'](https?://[^"']*?\.m3u8[^"']*)["']"""),
+                // Padrão para URLs de CDN comum
+                Regex("""https?://(?:be\d+\.rcr\d+\.waw\d+\.\w+\.com|cdn\d+\.\w+\.com)/[^\s"']*?\.m3u8[^\s"']*""")
             )
             
-            // Procurar usando todos os padrões
             for (pattern in patterns) {
                 val matches = pattern.findAll(html)
                 for (match in matches) {
                     var foundUrl = match.value
-                    
-                    // Se o padrão tem grupos de captura, pegar o primeiro grupo
-                    if (match.groupValues.size > 1 && match.groupValues[1].startsWith("http")) {
+                    if (match.groupValues.size > 2 && match.groupValues[2].startsWith("http")) {
+                        foundUrl = match.groupValues[2]
+                    } else if (match.groupValues.size > 1 && match.groupValues[1].startsWith("http")) {
                         foundUrl = match.groupValues[1]
                     }
                     
-                    if (isValidM3u8Url(foundUrl)) {
-                        println("SuperFlix: findM3u8Urls - URL encontrada via regex: $foundUrl")
+                    if (isValidStreamUrl(foundUrl)) {
+                        println("SuperFlix: tryWebViewResolver - URL encontrada no HTML: $foundUrl")
                         m3u8Urls.add(foundUrl)
                     }
                 }
             }
             
-            // Procurar em scripts JavaScript
-            document.select("script").forEach { script ->
-                val scriptContent = script.html()
-                if (scriptContent.contains("m3u8") || scriptContent.contains("hls") || scriptContent.contains("master.m3u8")) {
-                    // Padrão específico para URLs hls2
-                    val hls2Pattern = Regex("""https?://[^"'\s;]+/hls2/[^"'\s;]+/master\.m3u8[^"'\s;]*""")
-                    val matches = hls2Pattern.findAll(scriptContent)
-                    
-                    for (match in matches) {
-                        val foundUrl = match.value
-                        if (isValidM3u8Url(foundUrl)) {
-                            println("SuperFlix: findM3u8Urls - URL encontrada em script: $foundUrl")
-                            m3u8Urls.add(foundUrl)
-                        }
-                    }
-                }
-            }
-            
-            // Procurar em iframes (players embutidos)
+            // Procurar em iframes (Fembed usa iframes)
             val iframes = document.select("iframe[src]")
-            println("SuperFlix: findM3u8Urls - Iframes encontrados: ${iframes.size}")
+            println("SuperFlix: tryWebViewResolver - Iframes encontrados: ${iframes.size}")
             
             for (iframe in iframes) {
                 val iframeSrc = iframe.attr("src")
                 if (iframeSrc.isNotBlank()) {
-                    println("SuperFlix: findM3u8Urls - Analisando iframe: $iframeSrc")
+                    println("SuperFlix: tryWebViewResolver - Analisando iframe: $iframeSrc")
                     try {
-                        // Analisar o iframe
                         val iframeDoc = app.get(fixUrl(iframeSrc)).document
                         val iframeHtml = iframeDoc.html()
                         
-                        // Procurar .m3u8 no iframe
-                        val iframePattern = Regex("""https?://[^\s"']*?\.m3u8[^\s"']*""")
-                        val matches = iframePattern.findAll(iframeHtml)
+                        // Procurar URLs no iframe
+                        val iframePatterns = listOf(
+                            Regex("""https?://[^\s"']*?\.m3u8[^\s"']*"""),
+                            Regex("""["'](?:file|source|url)["']\s*:\s*["'](https?://[^"']+)["']""")
+                        )
                         
-                        for (match in matches) {
-                            val foundUrl = match.value
-                            if (isValidM3u8Url(foundUrl)) {
-                                println("SuperFlix: findM3u8Urls - URL encontrada no iframe: $foundUrl")
-                                m3u8Urls.add(foundUrl)
+                        for (pattern in iframePatterns) {
+                            val matches = pattern.findAll(iframeHtml)
+                            for (match in matches) {
+                                var foundUrl = match.value
+                                if (match.groupValues.size > 1 && match.groupValues[1].startsWith("http")) {
+                                    foundUrl = match.groupValues[1]
+                                }
+                                
+                                if (isValidStreamUrl(foundUrl)) {
+                                    println("SuperFlix: tryWebViewResolver - URL encontrada no iframe: $foundUrl")
+                                    m3u8Urls.add(foundUrl)
+                                }
                             }
                         }
                     } catch (e: Exception) {
-                        println("SuperFlix: findM3u8Urls - Erro ao analisar iframe: ${e.message}")
+                        println("SuperFlix: tryWebViewResolver - Erro no iframe: ${e.message}")
                     }
                 }
             }
             
         } catch (e: Exception) {
-            println("SuperFlix: findM3u8Urls - Erro: ${e.message}")
+            println("SuperFlix: tryWebViewResolver - Erro: ${e.message}")
         }
         
-        return m3u8Urls.distinct().filter { isValidM3u8Url(it) }
+        return m3u8Urls.distinct()
     }
 
-    private fun isValidM3u8Url(url: String): Boolean {
+    private suspend fun tryDirectFembedApi(url: String): List<String> {
+        val videoUrls = mutableListOf<String>()
+        
+        try {
+            println("SuperFlix: tryDirectFembedApi - Tentando extrair ID do Fembed...")
+            
+            // Extrair ID do Fembed da URL
+            val fembedId = extractFembedId(url)
+            if (fembedId != null) {
+                println("SuperFlix: tryDirectFembedApi - ID encontrado: $fembedId")
+                
+                // Tentar algumas APIs conhecidas do Fembed
+                val apiUrls = listOf(
+                    "https://fembed.sx/api/source/$fembedId",
+                    "https://www.fembed.com/api/source/$fembedId",
+                    "https://fembed.net/api/source/$fembedId"
+                )
+                
+                for (apiUrl in apiUrls) {
+                    try {
+                        println("SuperFlix: tryDirectFembedApi - Tentando API: $apiUrl")
+                        val response = app.get(apiUrl, referer = url).text
+                        
+                        // Procurar URLs MP4 na resposta
+                        val mp4Pattern = Regex("""["'](file|url)["']\s*:\s*["'](https?://[^"']+\.mp4[^"']*)["']""")
+                        val matches = mp4Pattern.findAll(response)
+                        
+                        for (match in matches) {
+                            val foundUrl = match.groupValues[2]
+                            println("SuperFlix: tryDirectFembedApi - MP4 encontrado: $foundUrl")
+                            videoUrls.add(foundUrl)
+                        }
+                        
+                        // Procurar URLs M3U8
+                        val m3u8Pattern = Regex("""["'](file|url)["']\s*:\s*["'](https?://[^"']+\.m3u8[^"']*)["']""")
+                        val m3u8Matches = m3u8Pattern.findAll(response)
+                        
+                        for (match in m3u8Matches) {
+                            val foundUrl = match.groupValues[2]
+                            println("SuperFlix: tryDirectFembedApi - M3U8 encontrado: $foundUrl")
+                            videoUrls.add(foundUrl)
+                        }
+                        
+                    } catch (e: Exception) {
+                        println("SuperFlix: tryDirectFembedApi - Erro na API: ${e.message}")
+                    }
+                }
+            }
+            
+        } catch (e: Exception) {
+            println("SuperFlix: tryDirectFembedApi - Erro geral: ${e.message}")
+        }
+        
+        return videoUrls.distinct()
+    }
+
+    private fun extractFembedId(url: String): String? {
+        // Padrões comuns de URLs do Fembed
+        val patterns = listOf(
+            Regex("""/e/([a-zA-Z0-9]+)"""),
+            Regex("""/v/([a-zA-Z0-9]+)"""),
+            Regex("""embed/([a-zA-Z0-9]+)""")
+        )
+        
+        for (pattern in patterns) {
+            val match = pattern.find(url)
+            if (match != null) {
+                return match.groupValues[1]
+            }
+        }
+        
+        return null
+    }
+
+    private fun isValidStreamUrl(url: String): Boolean {
         if (url.isBlank() || !url.startsWith("http")) return false
         
-        // URLs para ignorar (análise, anúncios, etc.)
+        // Ignorar URLs de análise/anúncios
         val ignorePatterns = listOf(
             "google-analytics", "doubleclick", "facebook", "twitter",
             "instagram", "analytics", "tracking", "pixel", "beacon",
             "ads", "adserver", "banner", "sponsor", "gstatic",
-            "googlesyndication", "googletagmanager", "youtube.com",
-            "vimeo.com", "facebook.com/tr", "facebook.com/events"
+            "googlesyndication", "googletagmanager"
         )
         
         if (ignorePatterns.any { url.contains(it, ignoreCase = true) }) {
             return false
         }
         
-        // Deve conter .m3u8
-        return url.contains(".m3u8")
+        // Aceitar apenas URLs de vídeo
+        return url.contains(".m3u8") || url.contains(".mp4") || url.contains(".mkv") || url.contains(".avi")
     }
 
-    private fun extractQualityFromM3u8Url(url: String): Int {
+    private fun extractQualityFromUrl(url: String): Int {
         val qualityPatterns = mapOf(
-            Regex("""/360p?/|/360/|360p?\.m3u8""") to 360,
-            Regex("""/480p?/|/480/|480p?\.m3u8""") to 480,
-            Regex("""/720p?/|/720/|720p?\.m3u8|hd\.m3u8""") to 720,
-            Regex("""/1080p?/|/1080/|1080p?\.m3u8|fullhd\.m3u8""") to 1080,
-            Regex("""/2160p?/|/4k/|/uhd/|2160p?\.m3u8|4k\.m3u8""") to 2160
+            Regex("""360p""", RegexOption.IGNORE_CASE) to 360,
+            Regex("""480p""", RegexOption.IGNORE_CASE) to 480,
+            Regex("""720p""", RegexOption.IGNORE_CASE) to 720,
+            Regex("""1080p""", RegexOption.IGNORE_CASE) to 1080,
+            Regex("""2160p|4k""", RegexOption.IGNORE_CASE) to 2160
         )
         
         for ((pattern, quality) in qualityPatterns) {
-            if (pattern.containsMatchIn(url.lowercase())) {
+            if (pattern.containsMatchIn(url)) {
                 return quality
-            }
-        }
-        
-        // Tentar detectar qualidade pelo padrão hls2
-        if (url.contains("/hls2/")) {
-            try {
-                val pathSegments = url.split("/")
-                for (segment in pathSegments) {
-                    if (segment.contains("p") && segment.matches(Regex("""\d+p"""))) {
-                        return segment.replace("p", "").toIntOrNull() ?: Qualities.Unknown.value
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignorar erro
             }
         }
         
