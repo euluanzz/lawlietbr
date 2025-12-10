@@ -658,10 +658,11 @@ private suspend fun searchOnTMDB(query: String, year: Int?, isTv: Boolean): TMDB
     )
 
     private data class TMDBCast(
-        @JsonProperty("name") val name: String,
-        @JsonProperty("profile_path") val profile_path: String?,
-        @JsonProperty("order") val order: Int?  // Para ordenar atores por importância
-    )
+    @JsonProperty("name") val name: String,
+    @JsonProperty("character") val character: String?,
+    @JsonProperty("profile_path") val profile_path: String?,
+    @JsonProperty("order") val order: Int?
+)
 
     private data class TMDBVideos(
         @JsonProperty("results") val results: List<TMDBVideo>
