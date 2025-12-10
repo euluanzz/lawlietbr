@@ -13,12 +13,11 @@ jobs:
       contents: write
 
     steps:
-      # 1. CHECKOUT
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. SETUP JAVA
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -29,50 +28,49 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 3. BUILD
       - name: Build with Gradle
         run: ./gradlew assemble --refresh-dependencies --info --stacktrace
 
-      # 4. GERAÇÃO DOS MANIFESTOS
       - name: Generate plugins.json
         run: ./gradlew makePluginsJson -PoutputFile="build/plugins.json"
 
-      # 5. CRIAÇÃO DO REPO + CORREÇÃO DE URLs
       - name: Move, Fix URLs and Create repo.json
         run: |
-          # Base RAW do GitHub para downloads
-          REPO_BASE_URL="https://github.com/${{ github.repository }}/raw/refs/heads/main/builds"
-          PLUGINS_LIST="[\"$REPO_BASE_URL/plugins.json\"]"
+          GITHUB_REPO="${{ github.repository }}" 
+
+          # Base RAW para downloads
+          REPO_BASE_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/heads/main/builds"
 
           mkdir -p builds
           mv build/plugins.json builds/plugins.json
 
-          # Escapa a URL para uso no sed
-          REPO_BASE_URL_ESCAPED=$(echo $REPO_BASE_URL | sed 's/\//\\\//g')
+          # Escapa URL para sed
+          REPO_BASE_URL_ESCAPED=$(echo "$REPO_BASE_URL" | sed 's/\//\\\//g')
 
-          # Corrige URLs internas do plugins.json (.cs3)
+          # Corrige URLs .cs3
           sed -i -E 's|"url": "[^"]*/([^/]+)\.cs3"|"url": "'"$REPO_BASE_URL_ESCAPED"'/\1.cs3"|g' builds/plugins.json
 
-          # Corrige URLs internas do plugins.json (.jar)
+          # Corrige URLs .jar
           sed -i -E 's|"jarUrl": "[^"]*/([^/]+)\.jar"|"jarUrl": "'"$REPO_BASE_URL_ESCAPED"'/\1.jar"|g' builds/plugins.json
 
-          # Cria repo.json final
-          echo "{
-            \"name\": \"lietrepo\",
-            \"icon\": \"https:\/\/github.com\/lawlietbr.png\",
-            \"description\": \"Repositório BR do CloudStream\",
-            \"manifestVersion\": 1,
-            \"pluginLists\": $PLUGINS_LIST
-          }" > builds/repo.json
+          # Cria repo.json usando sua foto do GitHub
+          cat > builds/repo.json <<EOF
+{
+  "name": "lietrepo",
+  "iconUrl": "https://github.com/lawlietbr.png",
+  "description": "Repositório BR do CloudStream",
+  "manifestVersion": 1,
+  "pluginLists": ["$REPO_BASE_URL/plugins.json"]
+}
+EOF
 
-          # Copia os arquivos compilados
+          # Copia builds
           find . -type f -name "*.cs3" -exec cp {} builds/ \; || true
           find . -type f -name "*.jar" -exec cp {} builds/ \; || true
 
-      # 6. DEPLOY (COMMIT AUTOMÁTICO)
       - name: Commit providers to main
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Deploy: lietrepo"
+          commit_message: "Deploy: lietrepo (build)"
           branch: main
           file_pattern: builds/*
