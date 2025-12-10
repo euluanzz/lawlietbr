@@ -63,8 +63,8 @@ jobs:
 
                   # 6. CRIA o manifesto principal (repo.json)
                   echo "{
-                    \"name\": \"CloudStream Brasil Repo\",
-                    \"description\": \"Repositório Brasileiro de Provedores CloudStream\",
+                    \"name\": \"lietrepo\",
+                    \"description\": \"repositório BR do cloudstream\",
                     \"manifestVersion\": 1,
                     \"pluginLists\": $PLUGINS_LIST
                   }" > builds/repo.json
