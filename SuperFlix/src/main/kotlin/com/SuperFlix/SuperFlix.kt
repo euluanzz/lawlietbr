@@ -134,6 +134,15 @@ class SuperFlix : MainAPI() {
         val isSerie = url.contains("/serie/") || url.contains("/tv/") ||
                      (!isAnime && document.selectFirst(".episode-list, .season-list, .seasons") != null)
 
+        // Extrair informações de áudio (dublado/legendado)
+        val audioInfo = extractAudioInfoFromSite(document)
+        
+        // Extrair tags do site
+        val tags = extractTagsFromSite(document)
+        
+        // Adicionar informação de áudio às tags
+        val allTags = combineTagsWithAudioInfo(tags, audioInfo)
+
         val tmdbInfo = if (isAnime || isSerie) {
             searchOnTMDB(cleanTitle, year, true)
         } else {
@@ -143,10 +152,125 @@ class SuperFlix : MainAPI() {
         val siteRecommendations = extractRecommendationsFromSite(document)
 
         return if (tmdbInfo != null) {
-            createLoadResponseWithTMDB(tmdbInfo, url, document, isAnime, isSerie, siteRecommendations)
+            createLoadResponseWithTMDB(tmdbInfo, url, document, isAnime, isSerie, siteRecommendations, allTags)
         } else {
-            createLoadResponseFromSite(document, url, cleanTitle, year, isAnime, isSerie)
+            createLoadResponseFromSite(document, url, cleanTitle, year, isAnime, isSerie, allTags)
         }
+    }
+
+    private fun extractAudioInfoFromSite(document: org.jsoup.nodes.Document): List<String> {
+        val audioInfo = mutableListOf<String>()
+        
+        try {
+            // Método 1: Procurar por termos específicos no texto
+            val fullText = document.text().lowercase()
+            
+            // Verificar por "dublado"
+            if (fullText.contains("dublado") || fullText.contains("dublagem") || fullText.contains("dublado em português")) {
+                audioInfo.add("Dublado")
+            }
+            
+            // Verificar por "legendado" 
+            if (fullText.contains("legendado") || fullText.contains("legenda") || fullText.contains("legendado em português")) {
+                audioInfo.add("Legendado")
+            }
+            
+            // Método 2: Procurar em elementos específicos (como chips, badges, etc.)
+            document.select(".chip, .badge, .tag, .audio-info, .language-info, [class*='audio'], [class*='lang']").forEach { element ->
+                val text = element.text().lowercase()
+                when {
+                    text.contains("dublado") && !audioInfo.contains("Dublado") -> audioInfo.add("Dublado")
+                    text.contains("legendado") && !audioInfo.contains("Legendado") -> audioInfo.add("Legendado")
+                    text.contains("dublagem") && !audioInfo.contains("Dublado") -> audioInfo.add("Dublado")
+                    text.contains("legenda") && !audioInfo.contains("Legendado") -> audioInfo.add("Legendado")
+                    text.contains("pt-br") || text.contains("português") -> {
+                        // Se mencionar português mas não especificar, adiciona ambos
+                        if (!audioInfo.contains("Dublado") && !audioInfo.contains("Legendado")) {
+                            audioInfo.add("Dublado e Legendado")
+                        }
+                    }
+                }
+            }
+            
+            // Método 3: Verificar player/iframe (se mencionar áudio)
+            document.select("iframe, video, audio, [data-audio], [data-lang]").forEach { element ->
+                val src = element.attr("src").lowercase()
+                val dataLang = element.attr("data-lang").lowercase()
+                val dataAudio = element.attr("data-audio").lowercase()
+                
+                if (src.contains("pt") || src.contains("portuguese") ||
+                    dataLang.contains("pt") || dataLang.contains("portuguese") ||
+                    dataAudio.contains("pt") || dataAudio.contains("portuguese")) {
+                    if (!audioInfo.contains("Dublado") && !audioInfo.contains("Legendado")) {
+                        audioInfo.add("Dublado e Legendado")
+                    }
+                }
+            }
+            
+            // Método 4: Verificar meta tags
+            document.select("meta[name*='audio'], meta[property*='audio'], meta[name*='lang'], meta[property*='lang']").forEach { element ->
+                val content = element.attr("content").lowercase()
+                if (content.contains("pt") || content.contains("portuguese")) {
+                    if (!audioInfo.contains("Dublado") && !audioInfo.contains("Legendado")) {
+                        audioInfo.add("Dublado e Legendado")
+                    }
+                }
+            }
+            
+            // Se encontrou "Dublado" e "Legendado" separados, combinar em "Dublado e Legendado"
+            if (audioInfo.contains("Dublado") && audioInfo.contains("Legendado")) {
+                audioInfo.remove("Dublado")
+                audioInfo.remove("Legendado")
+                audioInfo.add("Dublado e Legendado")
+            }
+            
+        } catch (e: Exception) {
+            // Silenciosamente ignorar erros
+        }
+        
+        return audioInfo.distinct()
+    }
+
+    private fun extractTagsFromSite(document: org.jsoup.nodes.Document): List<String>? {
+        return try {
+            // Extrair tags dos chips/categorias
+            val tags = document.select("a.chip, .chip, .genre, .tags, .category, a[href*='/categoria/']")
+                .mapNotNull { it.text().trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .takeIf { it.isNotEmpty() }
+            
+            // Extrair também de meta tags (se não encontrou nos chips)
+            if (tags.isNullOrEmpty()) {
+                document.select("meta[name='keywords'], meta[property='keywords']")
+                    .firstOrNull()
+                    ?.attr("content")
+                    ?.split(",")
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotBlank() }
+                    ?.takeIf { it.isNotEmpty() }
+            } else {
+                tags
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun combineTagsWithAudioInfo(tags: List<String>?, audioInfo: List<String>): List<String>? {
+        val combined = mutableListOf<String>()
+        
+        // Adicionar tags existentes
+        tags?.let { combined.addAll(it) }
+        
+        // Adicionar informação de áudio (se houver)
+        audioInfo.forEach { info ->
+            if (!combined.contains(info)) {
+                combined.add(info)
+            }
+        }
+        
+        return combined.takeIf { it.isNotEmpty() }
     }
 
     private suspend fun searchOnTMDB(query: String, year: Int?, isTv: Boolean): TMDBInfo? {
@@ -285,7 +409,8 @@ class SuperFlix : MainAPI() {
         document: org.jsoup.nodes.Document,
         isAnime: Boolean,
         isSerie: Boolean,
-        siteRecommendations: List<SearchResponse>
+        siteRecommendations: List<SearchResponse>,
+        tags: List<String>?
     ): LoadResponse {
         return if (isAnime || isSerie) {
             val episodes = extractEpisodesWithTMDBInfo(
@@ -308,7 +433,7 @@ class SuperFlix : MainAPI() {
                 this.backgroundPosterUrl = tmdbInfo.backdropUrl
                 this.year = tmdbInfo.year
                 this.plot = tmdbInfo.overview
-                this.tags = tmdbInfo.genres
+                this.tags = tags ?: tmdbInfo.genres
 
                 tmdbInfo.actors?.let { actors ->
                     addActors(actors)
@@ -333,7 +458,7 @@ class SuperFlix : MainAPI() {
                 this.backgroundPosterUrl = tmdbInfo.backdropUrl
                 this.year = tmdbInfo.year
                 this.plot = tmdbInfo.overview
-                this.tags = tmdbInfo.genres
+                this.tags = tags ?: tmdbInfo.genres
                 this.duration = tmdbInfo.duration
 
                 tmdbInfo.actors?.let { actors ->
@@ -612,7 +737,8 @@ class SuperFlix : MainAPI() {
         title: String,
         year: Int?,
         isAnime: Boolean,
-        isSerie: Boolean
+        isSerie: Boolean,
+        tags: List<String>?
     ): LoadResponse {
         val ogImage = document.selectFirst("meta[property='og:image']")?.attr("content")
         val poster = ogImage?.let { fixUrl(it) }
@@ -620,9 +746,6 @@ class SuperFlix : MainAPI() {
         val description = document.selectFirst("meta[name='description']")?.attr("content")
         val synopsis = document.selectFirst(".syn, .description, .sinopse, .plot")?.text()
         val plot = description ?: synopsis
-
-        val tags = document.select("a.chip, .chip, .genre, .tags").map { it.text() }
-            .takeIf { it.isNotEmpty() }?.toList()
 
         val siteRecommendations = extractRecommendationsFromSite(document)
 
