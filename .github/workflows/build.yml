@@ -77,6 +77,6 @@ jobs:
             - name: Commit Providers to main branch
               uses: stefanzweifel/git-auto-commit-action@v5
               with:
-                  commit_message: "Deploy: CloudStream Providers Update (Final Download URL Fix)"
+                  commit_message: "Deploy: lietrepo (Final Download URL Fix)"
                   branch: main
                   file_pattern: builds/*
