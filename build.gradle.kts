@@ -32,12 +32,12 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo("https://github.com/euluan1912/cloudstream-brazil-providers")
-        authors = listOf("euluan1912")
+        setRepo("https://github.com/euluanzz/lawlietbr")
+        authors = listOf("euluanzz")
     }
 
     android {
-        namespace = "com.euluan1912"
+        namespace = "com.lawliet"
 
         defaultConfig {
             minSdk = 21
