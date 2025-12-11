@@ -1,71 +1,183 @@
-name: Build SuperFlix
+name: Build SuperFlix com Injeção Segura
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch:  # Permite executar manualmente
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # Permite fazer push de volta
 
     steps:
-      # 1. CHECKOUT
-      - uses: actions/checkout@v4
+      # PASSO 1: BAIXAR O CÓDIGO
+      - name: Checkout código
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Baixa TUDO, inclusive o template
+          fetch-depth: 0
 
-      # 2. SETUP JAVA
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4 
+      # PASSO 2: CONFIGURAR JAVA
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Grant execute permission for gradlew
+      - name: Dar permissão ao Gradle
         run: chmod +x gradlew
 
-      # 3. BUILD DIRETO - SIMPLES
-      - name: Build with Gradle
+      # PASSO 3: VERIFICAR SE O TEMPLATE EXISTE
+      - name: Verificar template
         run: |
-          echo "=== INICIANDO BUILD ==="
+          echo "=== VERIFICANDO TEMPLATE ==="
+          TEMPLATE="SuperFlix/src/main/kotlin/com/SuperFlix/Config.kt.template"
           
-          # Build limpo e simples
-          ./gradlew :SuperFlix:clean :SuperFlix:assembleDebug
-          
-          echo "=== BUILD COMPLETO ==="
+          if [ -f "$TEMPLATE" ]; then
+            echo "✅ Template encontrado: $TEMPLATE"
+            echo "📄 Conteúdo (primeiras linhas):"
+            head -10 "$TEMPLATE"
+          else
+            echo "❌ ERRO: Template NÃO encontrado!"
+            echo "Crie o arquivo: $TEMPLATE"
+            exit 1
+          fi
 
-      # 4. VERIFICAR SE FUNCIONOU
-      - name: Verificar BuildConfig
+      # PASSO 4: INJETAR A CHAVE DO SECRETS
+      - name: Inject TMDB API Key
         run: |
-          echo "=== VERIFICANDO BUILDCONFIG ==="
+          echo "=== INJETANDO CHAVE TMDB ==="
           
-          # Procurar BuildConfig do seu módulo
-          find . -name "BuildConfig.java" -path "*/superflix/*" 2>/dev/null | while read file; do
-            echo "📄 Arquivo: $file"
+          # Caminhos dos arquivos
+          TEMPLATE_FILE="SuperFlix/src/main/kotlin/com/SuperFlix/Config.kt.template"
+          OUTPUT_FILE="SuperFlix/src/main/kotlin/com/SuperFlix/Config.kt"
+          
+          # Pega a chave do GitHub Secrets
+          SECRET_KEY="${{ secrets.TMDB_API_KEY }}"
+          
+          echo "🔐 Chave do Secrets: ${#SECRET_KEY} caracteres"
+          
+          # Verifica se a chave existe
+          if [ -z "$SECRET_KEY" ]; then
+            echo "❌ ERRO: TMDB_API_KEY não definida no GitHub Secrets!"
+            echo "Vá em Settings → Secrets and variables → Actions"
+            echo "Adicione: TMDB_API_KEY = sua_chave_32_chars"
+            exit 1
+          fi
+          
+          # Verifica tamanho da chave
+          if [ ${#SECRET_KEY} -ne 32 ]; then
+            echo "⚠️  AVISO: Chave tem ${#SECRET_KEY} chars (deveria ser 32)"
+          fi
+          
+          # PASSO CRÍTICO: Substitui @@TMDB_API_KEY@@ pela chave real
+          echo "🔄 Substituindo placeholder..."
+          sed "s/@@TMDB_API_KEY@@/$SECRET_KEY/g" "$TEMPLATE_FILE" > "$OUTPUT_FILE"
+          
+          # Verifica se funcionou
+          echo "✅ Arquivo gerado: $OUTPUT_FILE"
+          echo "🔍 Verificando injeção..."
+          
+          if grep -q "$SECRET_KEY" "$OUTPUT_FILE"; then
+            echo "🎉 SUCESSO! Chave injetada corretamente"
+            echo "📏 Tamanho no arquivo: $(grep TMDB_API_KEY "$OUTPUT_FILE" | wc -c) bytes"
             
-            # Mostrar apenas a linha TMDB
-            if grep -q "TMDB_API_KEY" "$file"; then
-              echo "✅ TMDB_API_KEY encontrada"
-              LINE=$(grep "TMDB_API_KEY" "$file")
-              echo "Conteúdo: $LINE"
-              
-              # Verificar se é válida
-              if echo "$LINE" | grep -q '"b64d2f3a'; then
-                echo "🎉 SUCESSO! Chave REAL encontrada!"
-              elif echo "$LINE" | grep -q '"***"'; then
-                echo "❌ FALHA! Chave está '***' (mascarada)"
-              elif echo "$LINE" | grep -q '""'; then
-                echo "❌ FALHA! Chave está VAZIA"
-              else
-                echo "⚠️  Chave existe mas não reconhecida"
-              fi
+            # Mostra a linha (com máscara para segurança)
+            LINE=$(grep "TMDB_API_KEY" "$OUTPUT_FILE")
+            MASKED_LINE=$(echo "$LINE" | sed 's/"[^"]*\("[^"]*"\)/"***\1/')
+            echo "📝 Linha: $MASKED_LINE"
+          else
+            echo "❌ FALHA: Chave NÃO foi injetada!"
+            echo "Conteúdo do arquivo:"
+            cat "$OUTPUT_FILE"
+            exit 1
+          fi
+
+      # PASSO 5: EXECUTAR O BUILD
+      - name: Build do plugin
+        run: |
+          echo "=== EXECUTANDO BUILD ==="
+          
+          # Limpa builds anteriores
+          ./gradlew :SuperFlix:clean
+          
+          # Executa o build
+          echo "🔄 Compilando..."
+          ./gradlew :SuperFlix:assembleDebug
+          
+          # Verifica se o .cs3 foi gerado
+          CS3_FILE=$(find . -name "*.cs3" -type f | head -1)
+          
+          if [ -f "$CS3_FILE" ]; then
+            echo "✅ BUILD COMPLETO!"
+            echo "📦 Arquivo gerado: $CS3_FILE"
+            echo "📏 Tamanho: $(ls -lh "$CS3_FILE" | awk '{print $5}')"
+          else
+            echo "❌ ERRO: Nenhum arquivo .cs3 foi gerado!"
+            exit 1
+          fi
+
+      # PASSO 6: VERIFICAR SE A CHAVE ESTÁ NO .CS3
+      - name: Verificar chave no output
+        run: |
+          echo "=== VERIFICANDO ARQUIVO FINAL ==="
+          
+          # Encontra o arquivo .cs3
+          CS3_FILE=$(find . -name "*.cs3" -type f | head -1)
+          
+          if [ -f "$CS3_FILE" ]; then
+            echo "🔍 Analisando: $CS3_FILE"
+            
+            # Procura pela chave (ou parte dela) no arquivo
+            if strings "$CS3_FILE" | grep -q "b64d2f3a"; then
+              echo "✅ CONFIRMADO: Chave TMDB está presente no .cs3!"
+              echo "🎉 PLUGIN PRONTO PARA USAR!"
             else
-              echo "❌ TMDB_API_KEY NÃO encontrada"
+              echo "⚠️  Chave não encontrada no .cs3 (pode estar ofuscada)"
+              echo "📊 Strings do arquivo (primeiras 20):"
+              strings "$CS3_FILE" | head -20
             fi
-            echo "---"
-          done
+          fi
+
+      # PASSO 7: LIMPEZA (REMOVER ARQUIVOS SENSÍVEIS)
+      - name: Limpeza pós-build
+        run: |
+          echo "=== LIMPEZA SEGURA ==="
+          
+          # 1. Remove o arquivo Config.kt gerado (contém a chave)
+          if [ -f "SuperFlix/src/main/kotlin/com/SuperFlix/Config.kt" ]; then
+            rm "SuperFlix/src/main/kotlin/com/SuperFlix/Config.kt"
+            echo "🗑️  Config.kt removido (contém chave real)"
+          fi
+          
+          # 2. Mantém o template para próximos builds
+          echo "📄 Template mantido: Config.kt.template"
+          
+          # 3. Remove logs sensíveis
+          rm -f build.log gradle.properties local.properties
+          echo "🧹 Arquivos temporários removidos"
+
+      # PASSO 8 (OPCIONAL): COMMIT AUTOMÁTICO
+      - name: Commit automático
+        if: success()  # Só executa se o build foi bem
+        run: |
+          echo "=== COMMIT AUTOMÁTICO ==="
+          
+          # Configura git
+          git config --local user.email "github-actions@github.com"
+          git config --local user.name "GitHub Actions"
+          
+          # Adiciona apenas o template (se foi modificado)
+          git add SuperFlix/src/main/kotlin/com/SuperFlix/Config.kt.template
+          
+          # Faz commit
+          git commit -m "build: Template atualizado [skip ci]" || echo "Nenhuma alteração no template"
+          
+          # Faz push (opcional)
+          # git push origin main || echo "Nada para push"
+          
+          echo "✅ Processo completo!"
