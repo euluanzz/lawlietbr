@@ -41,7 +41,7 @@ jobs:
             echo "❌ Build falhou"
             echo ""
             echo "=== ERROS ==="
-            grep -E "^e: |error:|FAILED|✗|❌" build.log | head -20
+            grep -E "^e: |error:|FAILED|✗|" build.log | head -20
             exit 1
           fi
           
