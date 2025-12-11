@@ -1,9 +1,11 @@
 name: build do L
 
 on:
+
 push:
-branches:
-- main
+
+branches: - main
+
 workflow_dispatch:
 
 jobs:
