@@ -9,6 +9,7 @@ cloudstream {
     iconUrl = "https://superflix21.lol/assets/logo.png"
 }
 
+        val tmdbApiKey = (System.getenv("TMDB_API_KEY") ?: "").trim()
 
 android {
     compileSdk = 34 
@@ -20,8 +21,8 @@ android {
 
         buildConfigField(
             "String",
-            "TMDB_API_KEY".trim(),
-             "\"" + (System.getenv("TMDB_API_KEY") ?: "") + "\""
+            "TMDB_API_KEY", 
+            "\"$tmdbApiKey\""
         )
     }
 }
