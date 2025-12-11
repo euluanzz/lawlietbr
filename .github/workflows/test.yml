@@ -1,53 +1,30 @@
-name: Teste Injeção de Chave
+name: Teste Simples de Chave
 
-on:
-  workflow_dispatch:  # Permite executar manualmente
-  push:
-    branches: [ main ]
+on: [workflow_dispatch]
 
 jobs:
-  test-chave:
+  test:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      
-      - name: Teste 1 - Echo direto (NÃO FAÇA ISSO!)
-        run: echo "NUNCA faça isso: ${{ secrets.TMDB_API_KEY }}"
-      
-      - name: Teste 2 - Echo seguro
+      - name: Verificar se secret existe
         run: |
-          echo "Comprimento da chave: ${#TMDB_KEY}"
-          echo "Primeiros 4 chars: ${TMDB_KEY:0:4}"
-          echo "Últimos 4 chars: ${TMDB_KEY: -4}"
-        env:
-          TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
-      
-      - name: Teste 3 - Criar arquivo com chave
-        run: |
-          echo "Chave TMDB: $TMDB_KEY" > chave-test.txt
-          echo "Verificando arquivo criado:"
-          ls -la chave-test.txt
-          echo "Primeira linha do arquivo:"
-          head -n1 chave-test.txt
-        env:
-          TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
-      
-      - name: Teste 4 - Verificar formato da chave
-        run: |
-          if [[ ${#TMDB_KEY} -eq 32 ]]; then
-            echo "✅ Chave tem 32 caracteres (formato esperado)"
-          else
-            echo "❌ Chave tem ${#TMDB_KEY} caracteres (deveria ser 32)"
+          if [ -z "${{ secrets.TMDB_API_KEY }}" ]; then
+            echo "❌ Secret TMDB_API_KEY NÃO está configurado!"
             exit 1
-          fi
-          
-          if [[ "$TMDB_KEY" =~ ^[a-f0-9]{32}$ ]]; then
-            echo "✅ Formato hexadecial válido"
           else
-            echo "❌ Formato inválido"
-            exit 1
+            echo "✅ Secret TMDB_API_KEY está configurado"
+            
+            # Mostrar apenas comprimento (não o valor)
+            LENGTH=${#TMDB_KEY}
+            echo "Comprimento da chave: $LENGTH"
+            
+            if [ $LENGTH -eq 32 ]; then
+              echo "✅ Tamanho correto (32 caracteres)"
+            else
+              echo "❌ Tamanho errado: $LENGTH (deveria ser 32)"
+              exit 1
+            fi
           fi
         env:
           TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
