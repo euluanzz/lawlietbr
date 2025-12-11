@@ -643,7 +643,7 @@ class SuperFlix : MainAPI() {
             return null
         }
 
-        logDebug("Buscando AnimeSkip para MAL ID: $malId, S$seasonNumberE$episodeNumber")
+        logDebug("Buscando AnimeSkip para MAL ID: $malId, S$seasonNumber$episodeNumber")
         
         return try {
             val url = "$aniskipApiUrl/skip-times/$malId/$seasonNumber/$episodeNumber" +
