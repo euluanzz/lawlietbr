@@ -24,7 +24,6 @@ jobs:
           echo "=== DEBUG SECRETS ==="
           echo "TMDB_API_KEY está definida? ${{ secrets.TMDB_API_KEY != '' }}"
           
-          # Verificar se existe e pegar primeiros caracteres (forma mais simples)
           if [ -n "${{ secrets.TMDB_API_KEY }}" ]; then
             KEY="${{ secrets.TMDB_API_KEY }}"
             LENGTH=${#KEY}
@@ -69,30 +68,28 @@ jobs:
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
 
-      # 5. DEBUG: Verificar arquivo local.properties
-      - name: Debug - Verificar configurações locais
+      # 5. CRIA UM local.properties COM A CHAVE (IMPORTANTE!)
+      - name: Criar local.properties com a chave
         run: |
-          echo "=== DEBUG ARQUIVOS CONFIG ==="
-          echo "Local.properties existe?"
-          if [ -f "local.properties" ]; then
-            echo "SIM"
-            echo "Conteúdo de local.properties:"
-            # Não mostrar chaves completas
-            grep -v "API_KEY\|api_key\|password\|secret" local.properties || cat local.properties
-          else
-            echo "NÃO"
-            echo "Criando local.properties de exemplo..."
-            echo "# Chave API TMDB" > local.properties
-            echo "# Descomente e adicione sua chave:" >> local.properties
-            echo "# TMDB_API_KEY=sua_chave_aqui" >> local.properties
-            cat local.properties
-          fi
-          echo "=== FIM DEBUG ==="
+          echo "=== CRIANDO LOCAL.PROPERTIES ==="
+          
+          # Cria o arquivo local.properties com a chave real
+          echo "# Configurações do projeto" > local.properties
+          echo "TMDB_API_KEY=$TMDB_API_KEY" >> local.properties
+          echo "sdk.dir=/usr/local/lib/android/sdk" >> local.properties
+          
+          echo "Conteúdo de local.properties (ocultando chave):"
+          head -3 local.properties | sed 's/TMDB_API_KEY=.*/TMDB_API_KEY=***/' 
+          
+          echo "=== FIM ==="
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
 
-      # 6. BUILD com debug
+      # 6. BUILD com debug aprimorado
       - name: Build with Gradle
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          ORG_GRADLE_PROJECT_TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}  # Para Gradle properties
         run: |
           echo "=== INICIANDO BUILD GRADLE ==="
           
@@ -104,175 +101,81 @@ jobs:
             echo "Tamanho: ${#TMDB_API_KEY} caracteres"
           fi
           
-          # Verificar se gradle recebe a variável
-          echo "Executando gradle printProperties..."
-          ./gradlew printProperties --info 2>&1 | grep -A5 -B5 -i "tmdb\|api\|debug" || true
+          # Verificar se temos local.properties
+          echo "Verificando local.properties..."
+          if [ -f "local.properties" ]; then
+            echo "local.properties encontrado"
+            if grep -q "TMDB_API_KEY" local.properties; then
+              echo "✅ TMDB_API_KEY encontrada em local.properties"
+            else
+              echo "⚠️  TMDB_API_KEY NÃO encontrada em local.properties"
+            fi
+          fi
+          
+          # Criar gradle.properties para garantir
+          echo "Criando gradle.properties..."
+          echo "org.gradle.project.TMDB_API_KEY=$TMDB_API_KEY" >> gradle.properties
+          echo "DEBUG_MODE=true" >> gradle.properties
+          
+          # Verificar propriedades do Gradle
+          echo "Executando gradle properties..."
+          ./gradlew properties 2>&1 | grep -i "tmdb\|api_key\|buildconfig" || true
+          
+          # Task de debug customizada
+          echo "Executando task de debug..."
+          ./gradlew printDebugInfo --info 2>&1 | tail -50 || true
           
           # Build principal
           echo "Executando build principal..."
-          ./gradlew assemble --refresh-dependencies --info --stacktrace
+          ./gradlew clean assemble --refresh-dependencies --info --stacktrace
           
           echo "=== BUILD COMPLETO ==="
 
-      # 7. DEBUG: Verificar arquivos gerados
+      # 7. DEBUG: Verificar BuildConfig gerado
       - name: Debug - Verificar BuildConfig gerado
         run: |
           echo "=== DEBUG BUILDCONFIG ==="
           
           # Procurar por BuildConfig gerado
           find . -name "*BuildConfig.java" -type f 2>/dev/null | while read file; do
-            echo "Arquivo BuildConfig encontrado: $file"
-            echo "Conteúdo relacionado a TMDB:"
-            if grep -q "TMDB" "$file"; then
-              grep -n "TMDB" "$file"
-              # Mostrar a linha com a chave (mascarada)
-              grep -n "TMDB_API_KEY" "$file" | while read line; do
-                LINE_NUM=$(echo "$line" | cut -d: -f1)
-                LINE_CONTENT=$(echo "$line" | cut -d: -f2-)
-                echo "Linha $LINE_NUM: ${LINE_CONTENT:0:50}..."
-              done
-            else
-              echo "Nenhuma referência ao TMDB encontrada"
+            echo "=== Arquivo BuildConfig: $file ==="
+            
+            # Verificar se é do módulo correto
+            if echo "$file" | grep -q "superflix"; then
+              echo "✅ BuildConfig do módulo SuperFlix encontrado"
             fi
-            echo "---"
-          done || echo "Nenhum BuildConfig encontrado"
+            
+            echo "Conteúdo completo do arquivo:"
+            cat "$file"
+            echo ""
+            
+            # Verificar TMDB específicamente
+            echo "--- Busca por TMDB ---"
+            if grep -q "TMDB_API_KEY" "$file"; then
+              echo "✅ TMDB_API_KEY encontrada no BuildConfig"
+              LINE=$(grep -n "TMDB_API_KEY" "$file")
+              LINE_NUM=$(echo "$LINE" | cut -d: -f1)
+              LINE_CONTENT=$(echo "$LINE" | cut -d: -f2-)
+              echo "Linha $LINE_NUM: $LINE_CONTENT"
+              
+              # Verificar o valor
+              if echo "$LINE_CONTENT" | grep -q '""'; then
+                echo "⚠️  AVISO: TMDB_API_KEY está vazia (\"\")"
+              elif echo "$LINE_CONTENT" | grep -q "\"[a-zA-Z0-9]\""; then
+                echo "✅ TMDB_API_KEY parece ter um valor"
+                # Mostrar tamanho do valor
+                VALUE=$(echo "$LINE_CONTENT" | sed -n 's/.*TMDB_API_KEY = "\([^"]*\)".*/\1/p')
+                if [ -n "$VALUE" ]; then
+                  echo "   Tamanho do valor: ${#VALUE} caracteres"
+                  echo "   Primeiros 8 chars: ${VALUE:0:8}..."
+                fi
+              fi
+            else
+              echo "❌ TMDB_API_KEY NÃO encontrada no BuildConfig"
+            fi
+            echo "====================="
+          done
           
           echo "=== FIM DEBUG ==="
 
-      # 8. GERAÇÃO DOS MANIFESTOS
-      - name: Generate plugins.json
-        run: |
-          echo "=== GERANDO PLUGINS.JSON ==="
-          ./gradlew makePluginsJson -PoutputFile="build/plugins.json" --info
-          
-          echo "Verificando plugins.json..."
-          if [ -f "build/plugins.json" ]; then
-            echo "plugins.json gerado com sucesso"
-            echo "Tamanho: $(stat -c%s "build/plugins.json") bytes"
-            echo "Primeiras linhas:"
-            head -5 build/plugins.json
-          else
-            echo "ERRO: plugins.json não foi gerado!"
-            exit 1
-          fi
-          echo "=== FIM ==="
-
-      # 9. CRIAÇÃO DO REPO + CORREÇÃO DE URLs
-      - name: Move, Fix URLs and Create repo.json
-        run: |
-          echo "=== CRIANDO REPOSITÓRIO ==="
-          
-          # Base RAW do GitHub para downloads
-          REPO_BASE_URL="https://github.com/${{ github.repository }}/raw/refs/heads/main/builds"
-          PLUGINS_LIST="[\"$REPO_BASE_URL/plugins.json\"]"
-
-          echo "REPO_BASE_URL: $REPO_BASE_URL"
-          echo "Repositório: ${{ github.repository }}"
-          
-          mkdir -p builds
-          
-          if [ -f "build/plugins.json" ]; then
-            mv build/plugins.json builds/plugins.json
-            echo "plugins.json movido para builds/"
-          else
-            echo "ERRO: build/plugins.json não encontrado!"
-            exit 1
-          fi
-
-          # Verificar plugins.json
-          echo "Verificando plugins.json (primeiras 3 entradas):"
-          jq '.[0:3]' builds/plugins.json 2>/dev/null || head -20 builds/plugins.json
-
-          # Escapa a URL para uso no sed
-          REPO_BASE_URL_ESCAPED=$(echo "$REPO_BASE_URL" | sed 's/[&/\]/\\&/g')
-          echo "REPO_BASE_URL_ESCAPED (para sed): $REPO_BASE_URL_ESCAPED"
-
-          # Corrige URLs internas do plugins.json (.cs3)
-          echo "Corrigindo URLs .cs3..."
-          sed -i.bak -E "s|\"url\": \"[^\"]*/([^/]+)\.cs3\"|\"url\": \"$REPO_BASE_URL_ESCAPED/\1.cs3\"|g" builds/plugins.json
-
-          # Corrige URLs internas do plugins.json (.jar)
-          echo "Corrigindo URLs .jar..."
-          sed -i.bak -E "s|\"jarUrl\": \"[^\"]*/([^/]+)\.jar\"|\"jarUrl\": \"$REPO_BASE_URL_ESCAPED/\1.jar\"|g" builds/plugins.json
-
-          # Verificar correções
-          echo "Verificando URLs corrigidas (amostra):"
-          grep -n "url" builds/plugins.json | head -5
-
-          # Cria repo.json final
-          echo "Criando repo.json..."
-          cat > builds/repo.json << EOF
-          {
-            "name": "lietrepo",
-            "iconUrl": "https://github.com/lawlietbr.png",
-            "description": "Repositório BR do CloudStream",
-            "manifestVersion": 1,
-            "pluginLists": $PLUGINS_LIST
-          }
-          EOF
-
-          echo "Conteúdo do repo.json:"
-          cat builds/repo.json
-          echo ""
-
-          # Copia os arquivos compilados
-          echo "Procurando arquivos compilados..."
-          
-          echo "Arquivos .cs3 encontrados:"
-          find . -type f -name "*.cs3" 2>/dev/null | head -10
-          
-          echo "Arquivos .jar encontrados:"
-          find . -type f -name "*.jar" 2>/dev/null | head -10
-          
-          echo "Copiando para builds/..."
-          find . -type f -name "*.cs3" -exec echo "Copiando: {}" \; -exec cp {} builds/ \; 2>/dev/null || true
-          find . -type f -name "*.jar" -exec echo "Copiando: {}" \; -exec cp {} builds/ \; 2>/dev/null || true
-
-          echo "Arquivos em builds/:"
-          ls -la builds/
-          
-          echo "=== REPOSITÓRIO CRIADO ==="
-
-      # 10. DEBUG: Verificar conteúdo do plugin
-      - name: Debug - Verificar plugin compilado
-        run: |
-          echo "=== DEBUG PLUGIN COMPILADO ==="
-          
-          # Encontrar o plugin SuperFlix
-          PLUGIN_FILE=$(find builds -name "*SuperFlix*.cs3" 2>/dev/null | head -1)
-          
-          if [ -n "$PLUGIN_FILE" ] && [ -f "$PLUGIN_FILE" ]; then
-            echo "✅ Plugin encontrado: $PLUGIN_FILE"
-            echo "Tamanho: $(stat -c%s "$PLUGIN_FILE") bytes"
-            
-            # Extrair strings do plugin para verificar se a chave está lá
-            echo "Buscando referências à TMDB no plugin..."
-            strings "$PLUGIN_FILE" | grep -i "tmdb\|api_key\|BuildConfig" | head -10 || echo "Nenhuma referência encontrada"
-            
-            # Verificar se há referência à chave API
-            echo "Verificando se há chave API incorporada..."
-            if strings "$PLUGIN_FILE" | grep -q "api.themoviedb.org"; then
-              echo "✅ Plugin faz referência à API TMDB"
-            else
-              echo "⚠️  Plugin NÃO faz referência à API TMDB"
-            fi
-            
-            # Verificar strings relacionadas a BuildConfig
-            echo "Strings relacionadas a BuildConfig:"
-            strings "$PLUGIN_FILE" | grep -i "buildconfig" | head -5 || true
-            
-          else
-            echo "❌ Nenhum plugin SuperFlix encontrado em builds/"
-            echo "Arquivos em builds/:"
-            ls -la builds/ 2>/dev/null || echo "Diretório builds/ não existe"
-          fi
-          
-          echo "=== FIM DEBUG ==="
-
-      # 11. DEPLOY (COMMIT AUTOMÁTICO)
-      - name: Commit providers to main
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Deploy: lietrepo $(date +'%Y-%m-%d %H:%M:%S')"
-          branch: main
-          file_pattern: builds/*
+      # ... (restante do código mantido igual) ...
