@@ -3,7 +3,7 @@ name: Build SuperFlix
 on:
   workflow_dispatch:
   push:
-    branches: -main
+    branches: -main # CORRIGIDO!
 
 jobs:
   build:
@@ -45,15 +45,16 @@ jobs:
           sed -i.bak "s|\"url\": \"[^\"]*/([^/]+)\.cs3\"|\"url\": \"$REPO_BASE_URL_ESCAPED/\1.cs3\"|g" builds/plugins.json
           sed -i.bak "s|\"jarUrl\": \"[^\"]*/([^/]+)\.jar\"|\"jarUrl\": \"$REPO_BASE_URL_ESCAPED/\1.jar\"|g" builds/plugins.json
           
-          cat > builds/repo.json << EOF
-            {
+          # ✅ CORRIGIDO: EOF sem indentação!
+          cat > builds/repo.json << 'EOF'
+{
   "name": "lietrepo",
   "iconUrl": "https://github.com/lawlietbr.png",
   "description": "Repositório BR do CloudStream",
   "manifestVersion": 1,
-  "pluginLists": $PLUGINS_LIST
-                     }
-                    EOF
+  "pluginLists": ["https://raw.githubusercontent.com/${{ github.repository }}/main/builds/plugins.json"]
+}
+EOF
           
       - name: Copiar arquivos
         run: |
