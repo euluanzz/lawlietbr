@@ -1,145 +1,51 @@
-name: Build SuperFlix Completo
+name: Build SuperFlix
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]  # 🔥 AQUI ESTAVA O ERRO!
+    branches: -main
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. CHECKOUT
       - name: Checkout
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           
-      # 2. SETUP JAVA
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '11'
           
-      # 3. BUILD PLUGIN
       - name: Build plugin
         run: |
           chmod +x gradlew
+          ./gradlew :SuperFlix:assembleDebug
           
-          echo "🔨 Compilando SuperFlix..."
-          
-          # Build principal
-          ./gradlew :SuperFlix:assembleDebug --stacktrace 2>&1 | tee build_output.txt
-          
-          # Verifica se passou
-          if [ ${PIPESTATUS[0]} -eq 0 ]; then
-            echo "✅ Build bem-sucedido"
-            
-            # Mostra arquivo gerado
-            CS3_FILE=$(find . -name "*.cs3" -type f | head -1)
-            if [ -f "$CS3_FILE" ]; then
-              echo "📦 Plugin: $(basename "$CS3_FILE")"
-              echo "📏 Tamanho: $(ls -lh "$CS3_FILE" | awk '{print $5}')"
-            fi
-          else
-            echo "❌ Build falhou"
-            grep -E "^e: |error:|FAIL|✗|❌" build_output.txt | head -15
-            exit 1
-          fi
-          
-      # 4. GERAR plugins.json AUTOMÁTICO
-      - name: Gerar plugins.json automático
+      - name: Gerar plugins.json
         run: |
-          echo "=== GERANDO PLUGINS.JSON ==="
+          ./gradlew makePluginsJson -PoutputFile="build/plugins.json"
           
-          # Usa o gradle para gerar plugins.json
-          ./gradlew makePluginsJson -PoutputFile="build/plugins.json" --info
-          
-          echo "Verificando plugins.json..."
-          if [ -f "build/plugins.json" ]; then
-            echo "✅ plugins.json gerado com sucesso"
-            echo "📏 Tamanho: $(stat -c%s "build/plugins.json") bytes"
-            echo "📄 Primeiras linhas:"
-            head -5 build/plugins.json
-          else
-            echo "⚠️ Gradle não gerou, criando manualmente..."
-            
-            # Cria manualmente se necessário
-            CS3_FILE=$(find . -name "*.cs3" -type f | head -1)
-            CS3_NAME=$(basename "$CS3_FILE")
-            
-            cat > build/plugins.json << 'EOF'
-[
-  {
-    "name": "SuperFlix",
-    "pkg": "com.SuperFlix",
-    "apk": "SuperFlix.cs3",
-    "lang": "pt-br",
-    "code": 1,
-    "version": "1.0",
-    "versionName": "1.0.0",
-    "nsfw": false,
-    "hasAds": false,
-    "source": "https://superflix21.lol",
-    "file": "SuperFlix.cs3",
-    "url": "https://raw.githubusercontent.com/${{ github.repository }}/builds/SuperFlix.cs3",
-    "desc": "SuperFlix - Filmes, Séries e Animes em português"
-  }
-]
-EOF
-            echo "✅ plugins.json criado manualmente"
-          fi
-          echo "=== FIM ==="
-          
-      # 5. CRIAR REPOSITÓRIO E CORRIGIR URLs
-      - name: Criar repositório com URLs corrigidas
+      - name: Criar repositório
         run: |
-          echo "=== CRIANDO REPOSITÓRIO ==="
-          
-          # Define URL base
           REPO_BASE_URL="https://raw.githubusercontent.com/${{ github.repository }}/main/builds"
           PLUGINS_LIST="[\"$REPO_BASE_URL/plugins.json\"]"
           
-          echo "🔗 REPO_BASE_URL: $REPO_BASE_URL"
-          echo "📦 Repositório: ${{ github.repository }}"
-          
-          # Cria pasta builds
           mkdir -p builds
           
-          # Move plugins.json para builds
           if [ -f "build/plugins.json" ]; then
-            cp build/plugins.json builds/plugins.json
-            echo "✅ plugins.json copiado para builds/"
-          else
-            echo "❌ ERRO: build/plugins.json não encontrado!"
-            exit 1
+            mv build/plugins.json builds/plugins.json
           fi
           
-          # Verificar plugins.json
-          echo "🔍 Verificando plugins.json (primeiras 3 entradas):"
-          jq '.[0:3]' builds/plugins.json 2>/dev/null || head -20 builds/plugins.json
-          
-          # Escapa a URL para uso no sed
           REPO_BASE_URL_ESCAPED=$(echo "$REPO_BASE_URL" | sed 's/[&/\]/\\&/g')
-          echo "🔧 REPO_BASE_URL_ESCAPED (para sed): $REPO_BASE_URL_ESCAPED"
+          sed -i.bak "s|\"url\": \"[^\"]*/([^/]+)\.cs3\"|\"url\": \"$REPO_BASE_URL_ESCAPED/\1.cs3\"|g" builds/plugins.json
+          sed -i.bak "s|\"jarUrl\": \"[^\"]*/([^/]+)\.jar\"|\"jarUrl\": \"$REPO_BASE_URL_ESCAPED/\1.jar\"|g" builds/plugins.json
           
-          # Corrige URLs internas do plugins.json (.cs3)
-          echo "🔧 Corrigindo URLs .cs3..."
-          sed -i.bak -E "s|\"url\": \"[^\"]*/([^/]+)\.cs3\"|\"url\": \"$REPO_BASE_URL_ESCAPED/\1.cs3\"|g" builds/plugins.json
-          
-          # Corrige URLs internas do plugins.json (.jar)
-          echo "🔧 Corrigindo URLs .jar..."
-          sed -i.bak -E "s|\"jarUrl\": \"[^\"]*/([^/]+)\.jar\"|\"jarUrl\": \"$REPO_BASE_URL_ESCAPED/\1.jar\"|g" builds/plugins.json
-          
-          # Verificar correções
-          echo "✅ URLs corrigidas (amostra):"
-          grep -n "url" builds/plugins.json | head -5
-          
-          # Cria repo.json final
-          echo "📄 Criando repo.json..."
-          cat > builds/repo.json << 'EOF'
+          cat > builds/repo.json << EOF
 {
   "name": "lietrepo",
   "iconUrl": "https://github.com/lawlietbr.png",
@@ -149,104 +55,15 @@ EOF
 }
 EOF
           
-          # Adiciona a lista de plugins no repo.json
-          sed -i "s|\"pluginLists\":.*|\"pluginLists\": $PLUGINS_LIST|" builds/repo.json
-          
-          echo "✅ repo.json criado:"
-          cat builds/repo.json
-          
-      # 6. COPIAR ARQUIVOS COMPILADOS
-      - name: Copiar arquivos compilados
+      - name: Copiar arquivos
         run: |
-          echo "📂 Procurando arquivos compilados..."
+          find . -type f -name "*.cs3" -exec cp {} builds/ \; 2>/dev/null || true
+          find . -type f -name "*.jar" -exec cp {} builds/ \; 2>/dev/null || true
           
-          echo "📦 Arquivos .cs3 encontrados:"
-          find . -type f -name "*.cs3" 2>/dev/null | head -10
-          
-          echo "📦 Arquivos .jar encontrados:"
-          find . -type f -name "*.jar" 2>/dev/null | head -10
-          
-          echo "📂 Copiando para builds/..."
-          
-          # Copia .cs3
-          find . -type f -name "*.cs3" -exec echo "📋 Copiando: {}" \; -exec cp {} builds/ \; 2>/dev/null || true
-          
-          # Copia .jar
-          find . -type f -name "*.jar" -exec echo "📋 Copiando: {}" \; -exec cp {} builds/ \; 2>/dev/null || true
-          
-          echo "📁 Arquivos em builds/:"
-          ls -la builds/
-          
-      # 7. VERIFICAÇÃO DO PLUGIN
-      - name: Verificar plugin compilado
-        run: |
-          echo "=== DEBUG PLUGIN COMPILADO ==="
-          
-          # Encontrar o plugin SuperFlix
-          PLUGIN_FILE=$(find builds -name "*SuperFlix*.cs3" 2>/dev/null | head -1)
-          
-          if [ -n "$PLUGIN_FILE" ] && [ -f "$PLUGIN_FILE" ]; then
-            echo "✅ Plugin encontrado: $PLUGIN_FILE"
-            echo "📏 Tamanho: $(stat -c%s "$PLUGIN_FILE") bytes"
-            
-            # Extrair strings do plugin para verificar
-            echo "🔍 Buscando referências no plugin..."
-            strings "$PLUGIN_FILE" | grep -i "tmdb\|api_key\|BuildConfig\|superflix" | head -10 || echo "⚠️ Nenhuma referência encontrada"
-            
-            # Verificar se há referência à API TMDB
-            if strings "$PLUGIN_FILE" | grep -q "api.themoviedb.org\|workers.dev"; then
-              echo "✅ Plugin faz referência à API/proxy"
-            else
-              echo "⚠️ Plugin NÃO faz referência à API TMDB"
-            fi
-          else
-            echo "❌ Nenhum plugin SuperFlix encontrado em builds/"
-            echo "📁 Arquivos em builds/:"
-            ls -la builds/ 2>/dev/null || echo "Diretório builds/ não existe"
-          fi
-          
-          echo "=== FIM DEBUG ==="
-          
-      # 8. COMMIT E PUSH
       - name: Commit e push
         run: |
-          echo "📤 Committing arquivos..."
-          
-          # Configura git
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          
-          # Adiciona tudo na pasta builds
           git add builds/
-          
-          # Verifica se tem alterações
-          if git diff --cached --quiet; then
-            echo "⚠️ Nenhuma alteração para commit"
-          else
-            git commit -m "🚀 Build completo SuperFlix + JSONs - $(date +'%d/%m %H:%M')"
-            git push
-            echo "✅ Arquivos commitados e enviados com sucesso!"
-          fi
-          
-      # 9. RELATÓRIO FINAL
-      - name: Relatório final
-        if: always()
-        run: |
-          echo ""
-          echo "🎉 BUILD COMPLETO!"
-          echo ""
-          echo "📊 ARQUIVOS GERADOS:"
-          echo "1. builds/SuperFlix.cs3 - Plugin principal"
-          echo "2. builds/plugins.json - Lista de plugins automática"
-          echo "3. builds/repo.json - Configuração do repositório"
-          echo ""
-          echo "🔗 URLs PARA USAR:"
-          echo ""
-          echo "📱 PARA INSTALAR PLUGIN DIRETO:"
-          echo "URL: https://raw.githubusercontent.com/${{ github.repository }}/main/builds/SuperFlix.cs3"
-          echo ""
-          echo "📦 PARA ADICIONAR REPOSITÓRIO COMPLETO:"
-          echo "URL: https://raw.githubusercontent.com/${{ github.repository }}/main/builds/repo.json"
-          echo ""
-          echo "📄 LISTA DE PLUGINS:"
-          echo "https://raw.githubusercontent.com/${{ github.repository }}/main/builds/plugins.json"
+          git commit -m "🚀 Build"
+          git push
