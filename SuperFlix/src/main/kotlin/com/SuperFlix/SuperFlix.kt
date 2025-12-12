@@ -591,13 +591,18 @@ class SuperFlix : MainAPI() {
                     val tmdbEpisode = findTMDBEpisode(tmdbInfo, seasonNumber, epNumber)
 
                     val episode = if (tmdbEpisode != null) {
-                        // Episódio com dados do TMDB
+                        // Episódio com dados do TMDB - ADICIONANDO DURAÇÃO "-min" NA SINOPSE
+                        val descriptionWithDuration = buildDescriptionWithDuration(
+                            tmdbEpisode.overview,
+                            tmdbEpisode.runtime
+                        )
+
                         newEpisode(fixUrl(dataUrl)) {
                             this.name = tmdbEpisode.name ?: "Episódio $epNumber"
                             this.season = seasonNumber
                             this.episode = epNumber
                             this.posterUrl = tmdbEpisode.still_path?.let { "$tmdbImageUrl/w300$it" }
-                            this.description = tmdbEpisode.overview
+                            this.description = descriptionWithDuration
 
                             tmdbEpisode.air_date?.let { airDate ->
                                 try {
@@ -625,6 +630,25 @@ class SuperFlix : MainAPI() {
 
         println("✅ [DEBUG] Total de episódios extraídos: ${episodes.size}")
         return episodes
+    }
+
+    // NOVA FUNÇÃO: Adiciona "-min" no final da sinopse com a duração
+    private fun buildDescriptionWithDuration(overview: String?, runtime: Int?): String? {
+        return when {
+            overview != null && runtime != null && runtime > 0 -> {
+                // Adiciona "-min" no final da sinopse
+                "$overview\n\nDuração: $runtime min"
+            }
+            overview != null -> {
+                // Mantém apenas a sinopse se não houver duração
+                overview
+            }
+            runtime != null && runtime > 0 -> {
+                // Se não houver sinopse mas houver duração
+                "Duração: $runtime min"
+            }
+            else -> null
+        }
     }
 
     private fun findTMDBEpisode(tmdbInfo: TMDBInfo?, season: Int, episode: Int): TMDBEpisode? {
