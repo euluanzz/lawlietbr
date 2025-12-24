@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     kotlin("android")
     id("com.android.library")
