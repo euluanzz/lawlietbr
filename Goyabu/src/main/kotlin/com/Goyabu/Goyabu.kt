@@ -11,7 +11,7 @@ class Goyabu : MainAPI() {
     override var name = "Goyabu"
     override val hasMainPage = true
     override var lang = "pt-br"
-    override val hasDownloadSupport = false
+    override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Anime)
     override val usesWebView = false
 
