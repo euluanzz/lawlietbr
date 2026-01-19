@@ -10,7 +10,7 @@ class AniTube : MainAPI() {
     override var name = "AniTube"
     override val hasMainPage = true
     override var lang = "pt-br"
-    override val hasDownloadSupport = false
+    override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Anime)
     override val usesWebView = false
 
@@ -410,4 +410,4 @@ override suspend fun loadLinks(
     
     return linksFound
 }
-    
+}
