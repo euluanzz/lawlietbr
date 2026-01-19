@@ -22,10 +22,10 @@
     },
     {
         "iconUrl": "https://www.anitube.news/wp-content/uploads/cropped-Favicon6-192x192.png",
-        "jarFileSize": 76582,
+        "jarFileSize": 78103,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 20927,
+        "fileSize": 21731,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -42,11 +42,34 @@
         "name": "AniTube"
     },
     {
-        "iconUrl": "https://goyabu.io/wp-content/uploads/2025/12/cropped-goyabu-favicon-192x192.png",
-        "jarFileSize": 129587,
+        "iconUrl": "https://cineagora.net/templates/cineagora/images/touch-icon-180x180.png",
+        "jarFileSize": 248873,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 34519,
+        "fileSize": 60273,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "lawlietbr"
+        ],
+        "tvTypes": [
+            "Movies",
+            "Series",
+            "Animes"
+        ],
+        "version": 1,
+        "internalName": "CineAgora",
+        "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/CineAgora.jar",
+        "description": "Assista filmes e s\u00e9ries online gr\u00e1tis em HD no CineAgora",
+        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/CineAgora.cs3",
+        "name": "CineAgora"
+    },
+    {
+        "iconUrl": "https://goyabu.io/wp-content/uploads/2025/12/cropped-goyabu-favicon-192x192.png",
+        "jarFileSize": 129596,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
+        "fileSize": 34525,
         "status": 1,
         "language": "pt-br",
         "authors": [
