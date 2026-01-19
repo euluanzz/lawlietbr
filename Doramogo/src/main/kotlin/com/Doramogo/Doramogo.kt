@@ -33,32 +33,22 @@ class Doramogo : MainAPI() {
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
     override val usesWebView = false
 
-    // === TMDB CONFIGURAÇÃO ===
     private val tmdbImageUrl = "https://image.tmdb.org/t/p"
     private val TMDB_API_KEY = BuildConfig.TMDB_API_KEY
     private val TMDB_ACCESS_TOKEN = BuildConfig.TMDB_ACCESS_TOKEN
 
-    // Países de doramas (códigos ISO 3166-1)
     private val doramaCountries = setOf("KR", "JP", "CN", "TW", "TH", "PH", "ID", "VN", "MY", "SG")
-    
-    // Idiomas de doramas (códigos ISO 639-1)
     private val doramaLanguages = setOf("ko", "ja", "zh", "th", "tl", "id", "vi")
-    
-    // Gêneros relacionados a doramas
     private val doramaGenres = setOf(
         "Drama", "Romance", "Melodrama", "Family", "Comedy", 
         "Fantasy", "Mystery", "Thriller", "Action"
     )
-    
-    // Gêneros para excluir (COM ANIMAÇÃO ADICIONADA)
     private val excludeGenres = setOf(
         "Reality", "Talk Show", "News", "Documentary", "Game Show", "Animation"
     )
-    
-    // Gêneros que recebem penalidade (ANIMAÇÃO - forte negativo)
     private val penaltyGenres = mapOf(
-        "Animation" to -5,      // Animação é NÃO é dorama
-        "Anime" to -5,          // Anime é NÃO é dorama
+        "Animation" to -5,
+        "Anime" to -5,
         "Reality" to -3,
         "Talk Show" to -3,
         "Game Show" to -3
@@ -105,18 +95,13 @@ class Doramogo : MainAPI() {
         if (isEpisodesPage) {
             document.select(".episode-card").forEach { card ->
                 try {
-                    // Extrair o link principal
                     val aTag = card.selectFirst("a") ?: return@forEach
                     val href = aTag.attr("href")
                     
-                    // Extrair nome do dorama (pode estar dentro do h3 > a ou direto no a)
                     val titleElement = card.selectFirst("h3 a") ?: aTag
                     val doramaName = titleElement.text().trim()
                     if (doramaName.isBlank()) return@forEach
                     
-                    // EXTRAIR NÚMERO DO EPISÓDIO DO ELEMENTO <p> CORRETAMENTE
-                    // Baseado no HTML que você mostrou:
-                    // <p class="text-xs text-gray-600 mb-3 line-clamp-2" id="font-size-episodios-mobile">Episódio 03</p>
                     val episodeTextElement = card.selectFirst("p#font-size-episodios-mobile")
                         ?: card.selectFirst("p.text-xs.text-gray-600")
                         ?: card.selectFirst("p:contains(Episódio)")
@@ -124,20 +109,10 @@ class Doramogo : MainAPI() {
                     
                     val episodeText = episodeTextElement?.text()?.trim() ?: "Episódio 01"
                     
-                    // DEBUG
-                    println("DORAMOGO DEBUG - Card encontrado:")
-                    println("  Dorama: $doramaName")
-                    println("  Episódio Texto: $episodeText")
-                    println("  URL: $href")
-                    
-                    // Extrair número do episódio
                     val episodeNumber = extractEpisodeNumberFromText(episodeText)
                         ?: extractEpisodeNumberFromUrl(href)
                         ?: 1
                     
-                    println("  Número extraído: $episodeNumber")
-                    
-                    // Extrair imagem/poster
                     val imgElement = card.selectFirst("img")
                     val posterUrl = when {
                         imgElement?.hasAttr("src") == true -> fixUrl(imgElement.attr("src"))
@@ -145,7 +120,6 @@ class Doramogo : MainAPI() {
                         else -> null
                     }
                     
-                    // Verificar se é DUB ou LEG
                     val isDub = href.contains("/dub/") || request.data.contains("idiomar=DUB") || 
                                doramaName.contains("Dublado", ignoreCase = true)
                     val isLeg = href.contains("/leg/") || request.data.contains("idiomar=LEG") || 
@@ -157,25 +131,19 @@ class Doramogo : MainAPI() {
                         else -> ""
                     }
                     
-                    // Formatar título final: "Dorama - EP X DUB/LEG"
                     val finalTitle = if (audioType.isNotEmpty()) {
                         "$doramaName - EP $episodeNumber $audioType"
                     } else {
                         "$doramaName - EP $episodeNumber"
                     }
                     
-                    println("  Título final: $finalTitle")
-                    println("  ---")
-                    
                     items.add(newTvSeriesSearchResponse(finalTitle, fixUrl(href), TvType.TvSeries) {
                         this.posterUrl = posterUrl
                     })
                 } catch (e: Exception) {
-                    println("DORAMOGO ERROR - Erro ao processar card: ${e.message}")
                 }
             }
         } else {
-            // Para outras páginas (doramas, filmes, gêneros)
             document.select(".episode-card").forEach { card ->
                 try {
                     val aTag = card.selectFirst("a") ?: return@forEach
@@ -208,7 +176,6 @@ class Doramogo : MainAPI() {
                         })
                     }
                 } catch (e: Exception) {
-                    // Ignorar erros
                 }
             }
         }
@@ -225,29 +192,24 @@ class Doramogo : MainAPI() {
         return newHomePageResponse(listOf(homePageList), hasNextPage)
     }
 
-    // Função para extrair número do episódio do texto
     private fun extractEpisodeNumberFromText(text: String): Int? {
-        println("DEBUG - Extraindo número de: '$text'")
-        
         val patterns = listOf(
             Regex("""Epis[oó]dio\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""EP\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""Ep\.\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""E(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""\b0*(\d+)\b""") // Apenas números (remove zeros à esquerda)
+            Regex("""\b0*(\d+)\b""")
         )
         
         for (pattern in patterns) {
             val match = pattern.find(text)
             if (match != null) {
                 val number = match.groupValues[1].toIntOrNull()
-                println("DEBUG - Padrão encontrado: $pattern, Número: $number")
                 return number
             }
         }
         
-        println("DEBUG - Nenhum padrão encontrado")
         return null
     }
 
@@ -397,10 +359,8 @@ class Doramogo : MainAPI() {
         
         var title = cleanTitle(fullTitle)
         
-        // Extrair número do episódio do título da página (se existir)
         val episodeNumberFromTitle = extractEpisodeNumberFromTitle(fullTitle)
         
-        // Se for uma página de episódio específico, criar título base
         val isEpisodePage = episodeNumberFromTitle != null && (
             url.contains("/episodio-") || 
             url.contains("/ep-") || 
@@ -408,7 +368,6 @@ class Doramogo : MainAPI() {
         )
         
         if (isEpisodePage) {
-            // Remover "Episódio X" do título para pegar o nome do dorama
             title = title.replace(Regex("\\s*-\\s*Epis[oó]dio\\s*\\d+.*$"), "").trim()
         }
         
@@ -418,53 +377,44 @@ class Doramogo : MainAPI() {
             ?: document.selectFirst("meta[property='og:description']")?.attr("content")?.trim()
             ?: ""
         
-        // === BUSCAR NO TMDB COM DETECÇÃO INTELIGENTE ===
         val isMovie = url.contains("/filmes/")
         
-        // Primeiro, tentar buscar como dorama (série)
         val tmdbInfo = if (!isMovie) {
             searchOnTMDBAsDorama(title, url)
         } else {
             searchOnTMDB(title, null, true)
         }
         
-        // Poster - TMDB PRIMEIRO
         val poster = tmdbInfo?.posterUrl ?: 
             document.selectFirst("meta[property='og:image']")?.attr("content")?.let { fixUrl(it) }
             ?: document.selectFirst("#w-55")?.attr("src")?.let { fixUrl(it) }
         
-        // Background - APENAS TMDB
         val backdropUrl = tmdbInfo?.backdropUrl
         
         val infoMap = extractInfoMap(document)
         
-        // Ano - TMDB PRIMEIRO
         val year = tmdbInfo?.year
             ?: infoMap["ano"]?.toIntOrNull()
             ?: extractYearFromUrl(url)
             ?: title.findYear()
         
-        // Gêneros - TMDB PRIMEIRO
         val tmdbGenres = tmdbInfo?.genres?.map { it.name }
         val mainTags = document.select(".gens a").map { it.text().trim() }
         
         val allTags = (tmdbGenres ?: mainTags).distinct()
         
-        // Duração - TMDB PRIMEIRO
         val duration = tmdbInfo?.duration ?: infoMap["duração"]?.parseDuration()
         
         val type = if (isMovie) TvType.Movie else TvType.TvSeries
         
         val recommendations = extractRecommendationsFromSite(document)
         
-        // === ATORES E TRAILER DO TMDB ===
         val tmdbActors = tmdbInfo?.actors
         val tmdbTrailer = tmdbInfo?.youtubeTrailer
         
         if (type == TvType.TvSeries) {
             val episodes = mutableListOf<Episode>()
             
-            // TENTAR EXTRAIR EPISÓDIOS DA PÁGINA
             document.select(".dorama-one-season-block").forEach { seasonBlock ->
                 val seasonTitle = seasonBlock.selectFirst(".dorama-one-season-title")?.text()?.trim() ?: "1° Temporada"
                 val seasonNumber = extractSeasonNumber(seasonTitle)
@@ -483,7 +433,6 @@ class Doramogo : MainAPI() {
                 }
             }
             
-            // SE NÃO ENCONTROU EPISÓDIOS ESTRUTURADOS
             if (episodes.isEmpty()) {
                 document.select(".dorama-one-episode-item").forEach { episodeItem ->
                     val episodeUrl = episodeItem.attr("href")?.let { fixUrl(it) } ?: return@forEach
@@ -500,23 +449,18 @@ class Doramogo : MainAPI() {
                 }
             }
             
-            // SE AINDA NÃO TEM EPISÓDIOS, CRIAR UM COM BASE NA URL E TÍTULO
             if (episodes.isEmpty()) {
-                // Extrair número do episódio da URL ou título
                 val episodeNum = episodeNumberFromTitle 
                     ?: extractEpisodeNumberFromUrl(url) 
                     ?: 1
                 
-                // Extrair temporada da URL
                 val seasonNum = extractSeasonNumberFromUrl(url) ?: 1
                 
-                // Criar um episódio com a própria URL
                 episodes.add(newEpisode(url) {
                     this.name = "Episódio $episodeNum"
                     this.season = seasonNum
                     this.episode = episodeNum
                     
-                    // Se tiver descrição, adicionar
                     if (description.isNotBlank()) {
                         this.description = description
                     }
@@ -540,7 +484,6 @@ class Doramogo : MainAPI() {
                 }
             }
         } else {
-            // Para filmes
             return newMovieLoadResponse(title, url, type, url) {
                 this.posterUrl = poster
                 this.backgroundPosterUrl = backdropUrl
@@ -584,12 +527,12 @@ class Doramogo : MainAPI() {
         
         val streamPath = if (isFilme) {
             val pt = slug.first().uppercase()
-            "$pt/$slug/stream/stream.m3u8?nocache=${System.currentTimeMillis()}"
+            "$pt/\( slug/stream/stream.m3u8?nocache= \){System.currentTimeMillis()}"
         } else {
             val pt = slug.first().uppercase()
             val tempNum = temporada.toString().padStart(2, '0')
             val epNum = episodio.toString().padStart(2, '0')
-            "$pt/$slug/$tempNum-temporada/$epNum/stream.m3u8?nocache=${System.currentTimeMillis()}"
+            "$pt/$slug/$tempNum-temporada/\( epNum/stream.m3u8?nocache= \){System.currentTimeMillis()}"
         }
         
         val PRIMARY_URL = "https://proxy-us-east1-outbound-series.xreadycf.site"
@@ -685,9 +628,7 @@ class Doramogo : MainAPI() {
         
         return linksFound
     }
-    
-    // === FUNÇÕES AUXILIARES ===
-    
+
     private fun cleanTitle(title: String): String {
         return title.replace(Regex("\\s*\\(Legendado\\)", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\s*\\(Dublado\\)", RegexOption.IGNORE_CASE), "")
@@ -696,16 +637,15 @@ class Doramogo : MainAPI() {
             .replace(Regex("\\(\\d{4}\\)"), "")
             .trim()
     }
-    
-    // Função para extrair número do episódio do título (EP X)
+
     private fun extractEpisodeNumberFromTitle(title: String): Int? {
         val patterns = listOf(
             Regex("""EP\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""Epis[oó]dio\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE),
             Regex("""Ep\.\s*(\d+)""", RegexOption.IGNORE_CASE),
-            Regex("""- (\d+)(?:\s*DUB|\s*LEG)?$""", RegexOption.IGNORE_CASE), // Para "Dorama - 03 DUB"
-            Regex("""\((\d+)\)""") // Para "Dorama (03)"
+            Regex("""- (\d+)(?:\s*DUB|\s*LEG)?$""", RegexOption.IGNORE_CASE),
+            Regex("""\((\d+)\)""")
         )
         
         for (pattern in patterns) {
@@ -717,13 +657,13 @@ class Doramogo : MainAPI() {
         
         return null
     }
-    
+
     private fun extractYearFromUrl(url: String): Int? {
         val pattern = Regex("""/(?:series|filmes)/[^/]+-(\d{4})/""")
         val match = pattern.find(url)
         return match?.groupValues?.get(1)?.toIntOrNull()
     }
-    
+
     private fun extractEpisodeNumberFromUrl(url: String): Int? {
         val patterns = listOf(
             Regex("""episodio-(\d+)""", RegexOption.IGNORE_CASE),
@@ -740,7 +680,7 @@ class Doramogo : MainAPI() {
         
         return null
     }
-    
+
     private fun extractUrlsFromJavaScript(script: String): List<String> {
         val urls = mutableListOf<String>()
         
@@ -765,7 +705,7 @@ class Doramogo : MainAPI() {
         
         return urls.distinct()
     }
-    
+
     private fun extractInfoMap(document: Element): Map<String, String> {
         val infoMap = mutableMapOf<String, String>()
         
@@ -804,7 +744,7 @@ class Doramogo : MainAPI() {
         
         return infoMap
     }
-    
+
     private fun extractRecommendationsFromSite(document: Element): List<SearchResponse> {
         val recommendations = mutableListOf<SearchResponse>()
         
@@ -871,14 +811,12 @@ class Doramogo : MainAPI() {
         
         return recommendations.distinctBy { it.url }.take(10)
     }
-    
-    // === FUNÇÕES INTELIGENTES DO TMDB PARA DORAMAS ===
-    
+
     private suspend fun searchOnTMDBAsDorama(query: String, url: String): TMDBInfo? {
         val searchResults = searchTMDBWithStrategy(query, url.contains("/filmes/"))
         return searchResults.firstOrNull()
     }
-    
+
     private suspend fun searchTMDBWithStrategy(query: String, isMovie: Boolean): List<TMDBInfo> {
         val results = mutableListOf<TMDBInfo>()
         
@@ -892,11 +830,10 @@ class Doramogo : MainAPI() {
         
         return results
     }
-    
+
     private suspend fun searchAndFilterDoramas(query: String): List<TMDBInfo> {
         val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
         
-        // Buscar séries em português (para nomes romanizados)
         val searchUrl = "https://api.themoviedb.org/3/search/tv?api_key=$TMDB_API_KEY&query=$encodedQuery&language=pt-BR&include_adult=false"
         
         val headers = mapOf(
@@ -933,7 +870,7 @@ class Doramogo : MainAPI() {
             emptyList()
         }
     }
-    
+
     private suspend fun calculateDoramaScore(tvId: Int): DoramaScore {
         var totalScore = 0
         val details = getTMDBDetailsWithExtra(tvId)
@@ -942,7 +879,6 @@ class Doramogo : MainAPI() {
         
         val scoreDetails = mutableMapOf<String, Int>()
         
-        // 1. País de origem (MAIS IMPORTANTE) → +3 pontos
         val hasAsianCountry = details.production_countries?.any { country ->
             doramaCountries.contains(country.iso_3166_1)
         } == true
@@ -952,7 +888,6 @@ class Doramogo : MainAPI() {
             scoreDetails["País Asiático"] = 3
         }
         
-        // 2. Idioma original → +2 pontos
         val isAsianLanguage = details.original_language?.let { lang ->
             doramaLanguages.contains(lang)
         } == true
@@ -962,17 +897,14 @@ class Doramogo : MainAPI() {
             scoreDetails["Idioma Asiático"] = 2
         }
         
-        // 3. Gêneros → pontos positivos e negativos
         details.genres?.forEach { genre ->
             val genreName = genre.name
             
-            // PONTOS NEGATIVOS FORTES PARA ANIMAÇÃO
             if (penaltyGenres.containsKey(genreName)) {
                 val penalty = penaltyGenres[genreName] ?: 0
                 totalScore += penalty
                 scoreDetails["Gênero $genreName (penalidade)"] = penalty
             }
-            // Pontos positivos para gêneros de dorama
             else if (doramaGenres.contains(genreName)) {
                 val points = if (genreName == "Drama" || genreName == "Romance") 2 else 1
                 totalScore += points
@@ -980,7 +912,6 @@ class Doramogo : MainAPI() {
             }
         }
         
-        // 4. Estrutura de episódios → até +2 pontos
         val hasDoramaStructure = details.number_of_seasons?.let { seasons ->
             details.number_of_episodes?.let { episodes ->
                 seasons <= 2 && episodes in 8..32
@@ -992,7 +923,6 @@ class Doramogo : MainAPI() {
             scoreDetails["Estrutura de Dorama"] = 2
         }
         
-        // 5. Palavras-chave → +1 ponto (bônus)
         val hasDoramaKeywords = details.keywords?.keywords?.any { keyword ->
             keyword.name.contains("drama", ignoreCase = true) ||
             keyword.name.contains("korean", ignoreCase = true) ||
@@ -1006,7 +936,6 @@ class Doramogo : MainAPI() {
             scoreDetails["Palavras-chave Relacionadas"] = 1
         }
         
-        // 6. Penalidade por "Anime" no título ou keywords
         val title = details.title ?: details.name ?: ""
         val isAnime = title.contains("Anime", ignoreCase = true) ||
                      details.keywords?.keywords?.any { 
@@ -1021,9 +950,8 @@ class Doramogo : MainAPI() {
         
         return DoramaScore(totalScore, scoreDetails)
     }
-    
+
     private suspend fun getTMDBDetailsForDorama(tvId: Int): TMDBDetailsResponse? {
-        // Buscar detalhes em português para nomes romanizados
         return try {
             val headers = mapOf(
                 "Authorization" to "Bearer $TMDB_ACCESS_TOKEN",
@@ -1040,7 +968,7 @@ class Doramogo : MainAPI() {
             null
         }
     }
-    
+
     private suspend fun getTMDBDetailsWithExtra(tvId: Int): TMDBTVDetailsWithExtra? {
         return try {
             val headers = mapOf(
@@ -1058,17 +986,16 @@ class Doramogo : MainAPI() {
             null
         }
     }
-    
+
     private fun createTMDBInfoFromDetails(
         result: TMDBResult,
         details: TMDBDetailsResponse,
         isMovie: Boolean
     ): TMDBInfo? {
-        // Buscar atores romanizados (usar inglês ou português)
         val allActors = details.credits?.cast?.take(15)?.mapNotNull { actor ->
             if (actor.name.isNotBlank()) {
                 Actor(
-                    name = actor.name, // Já vem romanizado quando buscamos em pt-BR
+                    name = actor.name,
                     image = actor.profile_path?.let { "$tmdbImageUrl/w185$it" }
                 )
             } else null
@@ -1093,14 +1020,12 @@ class Doramogo : MainAPI() {
             duration = if (isMovie) details.runtime else null
         )
     }
-    
-    // Função de busca TMDB original (modificada para nomes romanizados)
+
     private suspend fun searchOnTMDB(query: String, year: Int?, isMovie: Boolean): TMDBInfo? {
         return try {
             val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
             val yearParam = year?.let { "&year=$it" } ?: ""
             
-            // Usar pt-BR para nomes romanizados
             val searchUrl = if (isMovie) {
                 "https://api.themoviedb.org/3/search/movie?api_key=$TMDB_API_KEY&query=$encodedQuery&language=pt-BR$yearParam"
             } else {
@@ -1118,7 +1043,6 @@ class Doramogo : MainAPI() {
             val searchResult = response.parsedSafe<TMDBSearchResponse>() ?: return null
             val result = searchResult.results.firstOrNull() ?: return null
             
-            // Buscar detalhes em pt-BR para nomes romanizados
             val details = if (isMovie) {
                 getMovieDetailsRomanized(result.id)
             } else {
@@ -1132,7 +1056,7 @@ class Doramogo : MainAPI() {
             null
         }
     }
-    
+
     private suspend fun getMovieDetailsRomanized(movieId: Int): TMDBDetailsResponse? {
         return try {
             val headers = mapOf(
@@ -1150,7 +1074,7 @@ class Doramogo : MainAPI() {
             null
         }
     }
-    
+
     private suspend fun getTVDetailsRomanized(tvId: Int): TMDBDetailsResponse? {
         return try {
             val headers = mapOf(
@@ -1168,7 +1092,7 @@ class Doramogo : MainAPI() {
             null
         }
     }
-    
+
     private fun getHighQualityTrailer(videos: List<TMDBVideo>?): String? {
         if (videos.isNullOrEmpty()) return null
         
@@ -1189,9 +1113,7 @@ class Doramogo : MainAPI() {
         ?.firstOrNull()
         ?.let { (key, _, _) -> "https://www.youtube.com/watch?v=$key" }
     }
-    
-    // === CLASSES DO TMDB ===
-    
+
     private data class TMDBInfo(
         val id: Int,
         val title: String?,
@@ -1280,7 +1202,6 @@ class Doramogo : MainAPI() {
         @JsonProperty("official") val official: Boolean? = false
     )
     
-    // Classes para o sistema de pontuação
     private data class DoramaScore(
         val totalScore: Int,
         val details: Map<String, Int>
@@ -1290,9 +1211,7 @@ class Doramogo : MainAPI() {
         val info: TMDBInfo,
         val score: DoramaScore
     )
-    
-    // === FUNÇÕES AUXILIARES FINAIS ===
-    
+
     private fun extractEpisodeNumberFromEpisodeItem(episodeItem: Element): Int {
         val episodeNumberSpan = episodeItem.selectFirst(".dorama-one-episode-number")
         episodeNumberSpan?.text()?.let { spanText ->
@@ -1309,7 +1228,7 @@ class Doramogo : MainAPI() {
             ?: match?.groupValues?.get(2)?.toIntOrNull()
             ?: 1
     }
-    
+
     private fun extractSeasonNumber(seasonTitle: String): Int {
         val pattern = Regex("""(\d+)°\s*Temporada|Temporada\s*(\d+)""", RegexOption.IGNORE_CASE)
         val match = pattern.find(seasonTitle)
@@ -1317,18 +1236,18 @@ class Doramogo : MainAPI() {
             ?: match?.groupValues?.get(2)?.toIntOrNull()
             ?: 1
     }
-    
+
     private fun extractSeasonNumberFromUrl(url: String): Int? {
         val pattern = Regex("""temporada[_-](\d+)""", RegexOption.IGNORE_CASE)
         val match = pattern.find(url)
         return match?.groupValues?.get(1)?.toIntOrNull()
     }
-    
+
     private fun String.findYear(): Int? {
         val pattern = Regex("""\b(19\d{2}|20\d{2})\b""")
         return pattern.find(this)?.value?.toIntOrNull()
     }
-    
+
     private fun String?.parseDuration(): Int? {
         if (this.isNullOrBlank()) return null
         val pattern = Regex("""(\d+)\s*(min|minutes|minutos)""", RegexOption.IGNORE_CASE)
