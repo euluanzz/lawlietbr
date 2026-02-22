@@ -53,8 +53,7 @@ class DattebayoBR : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/" to "Últimos Episódios",
-        "$mainUrl/animes/letra/todos" to "Animes (AZ)",
+        "$mainUrl/animes/letra/todos" to "Animes",
         "$mainUrl/anime-dublado" to "Animes Dublados",
         "$mainUrl/tokusatsus" to "Tokusatsus",
         "$mainUrl/doramas" to "Doramas",
