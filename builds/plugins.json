@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://animefire.io/img/icons/favicon-192x192.png",
-        "jarFileSize": 121340,
+        "jarFileSize": 144487,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 34713,
+        "fileSize": 42039,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -13,7 +13,7 @@
         "tvTypes": [
             "Animes"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "AnimeFire",
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AnimeFire.jar",
         "description": "Site brasileiro de animes em portugu\u00eas",
@@ -22,10 +22,10 @@
     },
     {
         "iconUrl": "https://www.anitube.news/wp-content/uploads/cropped-Favicon6-192x192.png",
-        "jarFileSize": 135326,
+        "jarFileSize": 116640,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 38825,
+        "fileSize": 35476,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -34,7 +34,7 @@
         "tvTypes": [
             "Animes"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "AniTube",
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AniTube.jar",
         "description": "AniTube \u00e9 um site para assistir seus animes favoritos online e de onde quiser, temos uma lista completa com diversos animes recentes e antigos para voc\u00ea explorar e o melhor disso tudo \u00e9 a qualidade do nosso site que o diferencia de outros.",
@@ -108,10 +108,10 @@
     },
     {
         "iconUrl": "https://goyabu.io/wp-content/uploads/2025/12/cropped-goyabu-favicon-192x192.png",
-        "jarFileSize": 137246,
+        "jarFileSize": 101240,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 40255,
+        "fileSize": 32632,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -120,7 +120,7 @@
         "tvTypes": [
             "Animes"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "Goyabu",
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Goyabu.jar",
         "description": "Animes Online em HD gratuitamente no Goyabu",
