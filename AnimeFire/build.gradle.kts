@@ -18,7 +18,7 @@ android {
         minSdk = 24
         targetSdk = 33
 
-        val tmdbApiKey = project.findProperty("TMDB_API_KEY") as? String
+       val tmdbApiKey = project.findProperty("TMDB_API_KEY") as? String
             ?: System.getenv("TMDB_API_KEY")
             ?: getLocalProperty("TMDB_API_KEY")
             ?: "dummy_api_key"
