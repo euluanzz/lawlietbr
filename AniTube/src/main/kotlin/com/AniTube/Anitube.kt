@@ -16,22 +16,22 @@ class AniTube : MainAPI() {
 
     companion object {
         private const val SEARCH_PATH = "/?s="
-        
+
         private const val ANIME_CARD = ".aniItem"
         private const val EPISODE_CARD = ".epiItem"
         private const val TITLE_SELECTOR = ".aniItemNome, .epiItemNome"
         private const val POSTER_SELECTOR = ".aniItemImg img, .epiItemImg img"
         private const val AUDIO_BADGE_SELECTOR = ".aniCC, .epiCC"
         private const val EPISODE_NUMBER_SELECTOR = ".epiItemInfos .epiItemNome"
-        
+
         private const val LATEST_EPISODES_SECTION = ".epiContainer"
-        
+
         private const val ANIME_TITLE = "h1"
         private const val ANIME_POSTER = "#capaAnime img"
         private const val ANIME_SYNOPSIS = "#sinopse2"
         private const val ANIME_METADATA = ".boxAnimeSobre .boxAnimeSobreLinha"
         private const val EPISODE_LIST = ".pagAniListaContainer > a"
-        
+
         private const val PLAYER_FHD = "#blog2 iframe"
         private const val PLAYER_BACKUP = "#blog1 iframe"
     }
@@ -75,7 +75,7 @@ class AniTube : MainAPI() {
             .trim()
             .ifBlank { dirtyTitle }
     }
-    
+
     private fun extractEpisodeNumber(title: String): Int? {
         return listOf(
             "Epis[oó]dio\\s*(\\d+)".toRegex(RegexOption.IGNORE_CASE),
@@ -85,7 +85,7 @@ class AniTube : MainAPI() {
             "\\b(\\d{1,2})\\b".toRegex()
         ).firstNotNullOfOrNull { it.find(title)?.groupValues?.get(1)?.toIntOrNull() }
     }
-    
+
     private fun extractAnimeTitleFromEpisode(episodeTitle: String): String {
         var clean = episodeTitle
             .replace("(?i)Epis[oó]dio\\s*\\d+".toRegex(), "")
@@ -97,18 +97,18 @@ class AniTube : MainAPI() {
             .replace("(?i)\\s*\\(legendado\\)".toRegex(), "")
             .replace("\\s+".toRegex(), " ")
             .trim()
-        
+
         clean = clean.replace("\\s*\\d+\\s*$".toRegex(), "").trim()
-        
+
         return clean.ifBlank { "Anime" }
     }
-    
+
     private fun isDubbed(element: Element): Boolean {
         return element.selectFirst(AUDIO_BADGE_SELECTOR)
             ?.text()
             ?.contains("Dublado", true) ?: false
     }
-    
+
     private fun extractM3u8FromUrl(url: String): String? {
         return if (url.contains("d=")) {
             try {
@@ -116,43 +116,43 @@ class AniTube : MainAPI() {
             } catch (e: Exception) { null }
         } else { url }
     }
-    
+
     private fun Element.toEpisodeSearchResponse(): AnimeSearchResponse? {
         val href = selectFirst("a")?.attr("href") ?: return null
         if (!href.contains("/video/")) return null
-        
+
         val episodeTitle = selectFirst(EPISODE_NUMBER_SELECTOR)?.text()?.trim() ?: return null
         val episodeNumber = extractEpisodeNumber(episodeTitle) ?: 1
         val animeTitle = extractAnimeTitleFromEpisode(episodeTitle)
         val posterUrl = selectFirst(POSTER_SELECTOR)?.attr("src")?.let { fixUrl(it) }
         val isDubbed = isDubbed(this)
-        
+
         val displayName = cleanTitle(animeTitle)
-        
+
         val urlWithPoster = if (posterUrl != null) {
             "$href|poster=$posterUrl"
         } else {
             href
         }
-        
+
         return newAnimeSearchResponse(displayName, fixUrl(urlWithPoster)) {
             this.posterUrl = posterUrl
             this.type = TvType.Anime
-            
+
             val dubStatus = if (isDubbed) DubStatus.Dubbed else DubStatus.Subbed
             addDubStatus(dubStatus, episodeNumber)
         }
     }
-    
+
     private fun Element.toAnimeSearchResponse(): AnimeSearchResponse? {
         val href = selectFirst("a")?.attr("href") ?: return null
-        
+
         val rawTitle = selectFirst(TITLE_SELECTOR)?.text()?.trim() ?: return null
         val cleanedTitle = cleanTitle(rawTitle).ifBlank { return null }
-        
+
         val posterUrl = selectFirst(POSTER_SELECTOR)?.attr("src")?.let { fixUrl(it) }
         val isDubbed = isDubbed(this)
-        
+
         return newAnimeSearchResponse(cleanedTitle, fixUrl(href)) {
             this.posterUrl = posterUrl
             this.type = TvType.Anime
@@ -165,11 +165,11 @@ class AniTube : MainAPI() {
         request: MainPageRequest
     ): HomePageResponse {
         val baseUrl = request.data
-        
+
         if (baseUrl.contains("/?s=")) {
             val url = if (page > 1) baseUrl.replace("/?s=", "/page/$page/?s=") else baseUrl
             val document = app.get(url).document
-            
+
             val allItems = document.select("$ANIME_CARD, $EPISODE_CARD")
                 .mapNotNull { 
                     val isEpisode = it.selectFirst(EPISODE_NUMBER_SELECTOR) != null
@@ -180,19 +180,19 @@ class AniTube : MainAPI() {
                     }
                 }
                 .distinctBy { it.url }
-            
+
             return newHomePageResponse(request.name, allItems, hasNext = true)
         }
-        
+
         val document = app.get(baseUrl).document
-        
+
         return when (request.name) {
             "Últimos Episódios" -> {
                 val episodeElements = document.select("$LATEST_EPISODES_SECTION $EPISODE_CARD")
                 val items = episodeElements
                     .mapNotNull { it.toEpisodeSearchResponse() }
                     .distinctBy { it.url }
-                
+
                 newHomePageResponse(
                     list = HomePageList(request.name, items, isHorizontalImages = true),
                     hasNext = false
@@ -200,7 +200,7 @@ class AniTube : MainAPI() {
             }
             "Animes Mais Vistos" -> {
                 var popularItems = listOf<AnimeSearchResponse>()
-                
+
                 for (container in document.select(".aniContainer")) {
                     val titleElement = container.selectFirst(".aniContainerTitulo")
                     if (titleElement != null && titleElement.text().contains("Animes Mais Vistos", true)) {
@@ -211,11 +211,11 @@ class AniTube : MainAPI() {
                         break
                     }
                 }
-                
+
                 if (popularItems.isEmpty()) {
                     val slides = document.select("#splide01 .splide__slide")
                         .filterNot { it.hasClass("splide__slide--clone") }
-                    
+
                     popularItems = slides
                         .mapNotNull { slide ->
                             slide.selectFirst(".aniItem")?.toAnimeSearchResponse()
@@ -223,7 +223,7 @@ class AniTube : MainAPI() {
                         .distinctBy { it.url }
                         .take(10)
                 }
-                
+
                 newHomePageResponse(
                     list = HomePageList(request.name, popularItems, isHorizontalImages = false),
                     hasNext = false
@@ -231,7 +231,7 @@ class AniTube : MainAPI() {
             }
             "Animes Recentes" -> {
                 var recentItems = listOf<AnimeSearchResponse>()
-                
+
                 for (container in document.select(".aniContainer")) {
                     val titleElement = container.selectFirst(".aniContainerTitulo")
                     if (titleElement != null && titleElement.text().contains("ANIMES RECENTES", true)) {
@@ -242,11 +242,11 @@ class AniTube : MainAPI() {
                         break
                     }
                 }
-                
+
                 if (recentItems.isEmpty()) {
                     val slides = document.select("#splide02 .splide__slide")
                         .filterNot { it.hasClass("splide__slide--clone") }
-                    
+
                     recentItems = slides
                         .mapNotNull { slide ->
                             slide.selectFirst(".aniItem")?.toAnimeSearchResponse()
@@ -254,7 +254,7 @@ class AniTube : MainAPI() {
                         .distinctBy { it.url }
                         .take(10)
                 }
-                
+
                 newHomePageResponse(
                     list = HomePageList(request.name, recentItems, isHorizontalImages = false),
                     hasNext = false
@@ -266,9 +266,9 @@ class AniTube : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         if (query.length < 2) return emptyList()
-        
+
         val document = app.get("$mainUrl$SEARCH_PATH${query.replace(" ", "+")}").document
-        
+
         return document.select("$ANIME_CARD, $EPISODE_CARD")
             .mapNotNull { 
                 val isEpisode = it.selectFirst(EPISODE_NUMBER_SELECTOR) != null
@@ -285,30 +285,30 @@ class AniTube : MainAPI() {
         val parts = url.split("|poster=")
         val actualUrl = parts[0]
         val thumbPoster = parts.getOrNull(1)?.let { if (it.isNotBlank()) fixUrl(it) else null }
-        
+
         val document = app.get(actualUrl).document
-        
+
         val rawTitle = document.selectFirst(ANIME_TITLE)?.text()?.trim() ?: "Sem Título"
         val episodeNumber = extractEpisodeNumber(rawTitle) ?: 1
         val title = cleanTitle(rawTitle)
-        
+
         val poster = thumbPoster ?: document.selectFirst(ANIME_POSTER)?.attr("src")?.let { fixUrl(it) }
-        
-    
+
+
         val siteSynopsis = document.selectFirst(ANIME_SYNOPSIS)?.text()?.trim()
-        
+
         val synopsis = if (actualUrl.contains("/video/")) {
-            
+
             siteSynopsis ?: "Episódio $episodeNumber de $title"
         } else {
             siteSynopsis ?: "Sinopse não disponível."
         }
-        
+
         var year: Int? = null
         var episodes: Int? = null
         var genres = emptyList<String>()
         var audioType = ""
-        
+
         document.select(ANIME_METADATA).forEach { element ->
             val text = element.text()
             when {
@@ -318,21 +318,21 @@ class AniTube : MainAPI() {
                 text.contains("Tipo de Episódio:", true) -> audioType = text.substringAfter("Tipo de Episódio:").trim()
             }
         }
-        
+
         val isDubbed = rawTitle.contains("dublado", true) || audioType.contains("dublado", true)
-        
+
         val episodesList = document.select(EPISODE_LIST).mapNotNull { element ->
             val episodeTitle = element.text().trim()
             val episodeUrl = element.attr("href")
             val epNumber = extractEpisodeNumber(episodeTitle) ?: 1
-            
+
             newEpisode(episodeUrl) {
                 this.name = "Episódio $epNumber"
                 this.episode = epNumber
                 this.posterUrl = poster
             }
         }
-        
+
         val allEpisodes = if (episodesList.isEmpty() && actualUrl.contains("/video/")) {
             listOf(newEpisode(actualUrl) {
                 this.name = "Episódio $episodeNumber"
@@ -342,17 +342,17 @@ class AniTube : MainAPI() {
         } else {
             episodesList
         }
-        
+
         val sortedEpisodes = allEpisodes.sortedBy { it.episode }
         val showStatus = if (episodes != null && sortedEpisodes.size >= episodes) ShowStatus.Completed else ShowStatus.Ongoing
-        
+
         return newAnimeLoadResponse(title, actualUrl, TvType.Anime) {
             this.posterUrl = poster
             this.year = year
             this.plot = synopsis
             this.tags = genres
             this.showStatus = showStatus
-            
+
             if (sortedEpisodes.isNotEmpty()) addEpisodes(if (isDubbed) DubStatus.Dubbed else DubStatus.Subbed, sortedEpisodes)
         }
     }
@@ -363,51 +363,12 @@ override suspend fun loadLinks(
     callback: (ExtractorLink) -> Unit
 ): Boolean {
     val actualUrl = data.split("|poster=")[0]
-    val document = app.get(actualUrl).document
     
-    var linksFound = false
-    
-    document.selectFirst(PLAYER_FHD)?.let { iframe ->
-        val src = iframe.attr("src").takeIf { it.isNotBlank() } ?: return@let
-        val m3u8Url = extractM3u8FromUrl(src) ?: src
-        
-        callback(newExtractorLink(name, "Player FHD", m3u8Url, ExtractorLinkType.M3U8) {
-            referer = "$mainUrl/"
-            quality = 1080
-        })
-        linksFound = true
-    }
-    
-    document.selectFirst(PLAYER_BACKUP)?.let { iframe ->
-        val src = iframe.attr("src").takeIf { it.isNotBlank() } ?: return@let
-        val isM3u8 = src.contains("m3u8", true)
-        val linkType = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-        
-        callback(newExtractorLink(name, "Player Backup", src, linkType) {
-            referer = "$mainUrl/"
-            quality = 720
-        })
-        linksFound = true
-    }
-    
-    document.select("iframe").forEachIndexed { index, iframe ->
-        val src = iframe.attr("src")
-        if (src.contains("m3u8", true)) {
-            val alreadyAdded = document.selectFirst(PLAYER_FHD)?.attr("src") == src || 
-                              document.selectFirst(PLAYER_BACKUP)?.attr("src") == src
-            
-            if (!alreadyAdded) {
-                val m3u8Url = extractM3u8FromUrl(src) ?: src
-                
-                callback(newExtractorLink(name, "Player Auto", m3u8Url, ExtractorLinkType.M3U8) {
-                    referer = "$mainUrl/"
-                    quality = 720
-                })
-                linksFound = true
-            }
-        }
-    }
-    
-    return linksFound
+return AniTubeVideoExtractor.extractVideoLinks(
+        url = actualUrl,
+        mainUrl = mainUrl,
+        name = name,
+        callback = callback
+    )
 }
 }
