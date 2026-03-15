@@ -107,6 +107,27 @@
         "name": "Doramogo"
     },
     {
+        "iconUrl": "https://embedtv.best/assets/icon.png",
+        "jarFileSize": 45769,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
+        "fileSize": 15089,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "lawlietbr"
+        ],
+        "tvTypes": [
+            "Live"
+        ],
+        "version": 1,
+        "internalName": "EmbedTV",
+        "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/EmbedTV.jar",
+        "description": "Embed TV - O melhor site de TV online. ",
+        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/EmbedTV.cs3",
+        "name": "EmbedTV"
+    },
+    {
         "iconUrl": "https://goyabu.io/wp-content/uploads/2025/12/cropped-goyabu-favicon-192x192.png",
         "jarFileSize": 101240,
         "apiVersion": 1,
