@@ -108,10 +108,10 @@
     },
     {
         "iconUrl": "https://embedtv.best/assets/icon.png",
-        "jarFileSize": 45765,
+        "jarFileSize": 41536,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 15085,
+        "fileSize": 13887,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -120,7 +120,7 @@
         "tvTypes": [
             "Live"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "EmbedTV",
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/EmbedTV.jar",
         "description": "Embed TV - O melhor site de TV online. ",
