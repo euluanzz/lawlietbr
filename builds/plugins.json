@@ -170,5 +170,29 @@
         "description": "MendigoFlix - Filmes e S\u00e9ries em Portugu\u00eas",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/MendigoFlix.cs3",
         "name": "MendigoFlix"
+    },
+    {
+        "iconUrl": "https://www.image2url.com/r2/default/images/1776018665375-eafe8c65-10f1-490c-9994-2f519402b6e3.png",
+        "jarFileSize": 124982,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
+        "fileSize": 44975,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "lawlietbr"
+        ],
+        "tvTypes": [
+            "Movies",
+            "Series",
+            "Animes",
+            "AsianDrama"
+        ],
+        "version": 1,
+        "internalName": "PobreFlix",
+        "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/PobreFlix.jar",
+        "description": "PobreFlix, assistir online, filmes, s\u00e9ries, animes, doramas",
+        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/PobreFlix.cs3",
+        "name": "PobreFlix"
     }
 ]
