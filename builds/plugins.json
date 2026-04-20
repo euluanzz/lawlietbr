@@ -2,6 +2,7 @@
     {
         "iconUrl": "https://animefire.io/img/icons/favicon-192x192.png",
         "jarFileSize": 144487,
+        "fileHash": "sha256-4d8a9f3dc584ea6e1ba71d39c8eaad164bfa8f2652ca3bb62d5883d085d3be71",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 42039,
@@ -18,11 +19,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AnimeFire.jar",
         "description": "Site brasileiro de animes em portugu\u00eas",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AnimeFire.cs3",
-        "name": "AnimeFire"
+        "name": "AnimeFire",
+        "jarHash": "sha256-dab67b63aa31ff5f375d1de1b1a4e34147d430791b21470188b9b0931d385118"
     },
     {
         "iconUrl": "https://www.anitube.news/wp-content/uploads/cropped-Favicon6-192x192.png",
         "jarFileSize": 116640,
+        "fileHash": "sha256-7d9bc0f8ad2cd986ec021d67ec83625a870af7a8a95a05e60430d379c331003f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 35476,
@@ -39,11 +42,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AniTube.jar",
         "description": "AniTube \u00e9 um site para assistir seus animes favoritos online e de onde quiser, temos uma lista completa com diversos animes recentes e antigos para voc\u00ea explorar e o melhor disso tudo \u00e9 a qualidade do nosso site que o diferencia de outros.",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AniTube.cs3",
-        "name": "AniTube"
+        "name": "AniTube",
+        "jarHash": "sha256-be37ec506823f4a0fbe665689cc5462b9202c6474dcfd4d08ee4ea6e917cd34d"
     },
     {
         "iconUrl": "https://cineagora.net/templates/cineagora/images/touch-icon-180x180.png",
         "jarFileSize": 245371,
+        "fileHash": "sha256-3e1a3501b0f0ff5e49cbea40fddce3355b4576c50fa3af878de5404d3ac06923",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 65493,
@@ -62,11 +67,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/CineAgora.jar",
         "description": "Assista filmes e s\u00e9ries online gr\u00e1tis em HD no CineAgora",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/CineAgora.cs3",
-        "name": "CineAgora"
+        "name": "CineAgora",
+        "jarHash": "sha256-e0bf5e2191b229a7dbedbb00eec17a30166364be711512cf7fb276f01f31fc7c"
     },
     {
         "iconUrl": "https://www.dattebayo-br.com/favicon.png",
         "jarFileSize": 73455,
+        "fileHash": "sha256-296bd7bef7251bdd35e1510fec4ad49416ad820ce4c8eda28cc17087db847096",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 25805,
@@ -83,11 +90,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/DattebayoBR.jar",
         "description": "DattebayoBR Animes Online",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/DattebayoBR.cs3",
-        "name": "DattebayoBR"
+        "name": "DattebayoBR",
+        "jarHash": "sha256-74c79ffea2f0055b5b9980096fc576ec2c1aca4e491b44622a2174a8536180cc"
     },
     {
         "iconUrl": "https://www.doramogo.net/assets/doramogo/images/apple-touch-icon.webp?version=200.50.10",
         "jarFileSize": 228327,
+        "fileHash": "sha256-fe72283076f3d1886a2807ebbc1520617879774e3af0bb88c7f4d2c58596e934",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 57467,
@@ -104,11 +113,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Doramogo.jar",
         "description": "Site de Doramas online",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Doramogo.cs3",
-        "name": "Doramogo"
+        "name": "Doramogo",
+        "jarHash": "sha256-d48cdf547a5727170a9eb6c1779fa8bcd5be72153b645258f2711a35559c1744"
     },
     {
         "iconUrl": "https://embedtv.best/assets/icon.png",
         "jarFileSize": 41536,
+        "fileHash": "sha256-a5b2c7a3e61560b5112fe712685b6a6baa6ce25060dec772ec72ff60faa3314c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 13887,
@@ -125,11 +136,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/EmbedTV.jar",
         "description": "Embed TV - O melhor site de TV online. ",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/EmbedTV.cs3",
-        "name": "EmbedTV"
+        "name": "EmbedTV",
+        "jarHash": "sha256-f560875d49857e8628cd56c27420422edb747bd3bb7f3c915191ec83c0549bf2"
     },
     {
         "iconUrl": "https://goyabu.io/wp-content/uploads/2025/12/cropped-goyabu-favicon-192x192.png",
         "jarFileSize": 101240,
+        "fileHash": "sha256-c344f38d8ce971c012675e3d9c62f3c8a93cd539d1eb2316929bbff3572341ce",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 32632,
@@ -146,11 +159,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Goyabu.jar",
         "description": "Animes Online em HD gratuitamente no Goyabu",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Goyabu.cs3",
-        "name": "Goyabu"
+        "name": "Goyabu",
+        "jarHash": "sha256-e8ad55a1e1165c0a810b309e224106d63a66a2e6199eb1eae7b2d47f7b50594a"
     },
     {
         "iconUrl": "https://mendigoflix.lol/assets/favicon.png",
         "jarFileSize": 223736,
+        "fileHash": "sha256-7bfe5cd1a5abd6046a1899933358352de7ca1eab56ce6cc6ba2194615eb9580c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 54431,
@@ -169,11 +184,13 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/MendigoFlix.jar",
         "description": "MendigoFlix - Filmes e S\u00e9ries em Portugu\u00eas",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/MendigoFlix.cs3",
-        "name": "MendigoFlix"
+        "name": "MendigoFlix",
+        "jarHash": "sha256-9ce83f59e868718a431345b6a9d17876f64a2bdeaebf042c77eb093891698856"
     },
     {
         "iconUrl": "https://www.image2url.com/r2/default/images/1776018665375-eafe8c65-10f1-490c-9994-2f519402b6e3.png",
         "jarFileSize": 124982,
+        "fileHash": "sha256-c469e73229efdc87f290dbd6c9e399378e74f0c1fddd0f4df208050118832e4d",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
         "fileSize": 44975,
@@ -193,6 +210,30 @@
         "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/PobreFlix.jar",
         "description": "PobreFlix, assistir online, filmes, s\u00e9ries, animes, doramas",
         "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/PobreFlix.cs3",
-        "name": "PobreFlix"
+        "name": "PobreFlix",
+        "jarHash": "sha256-0b21e91bf789ca5b22d8f538ee13664bd188223691d46ba2a6df2b73c9128292"
+    },
+    {
+        "iconUrl": "https://www.image2url.com/r2/default/images/1776423716151-20e5aa74-a764-4d60-8575-0851d8ab37df.png",
+        "jarFileSize": 34673,
+        "fileHash": "sha256-1ab8d2a0cd72a7f096b082dc9ed3a6f3f4848cda43fde58b9309e7eeb882ec82",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
+        "fileSize": 13477,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "lawlietbr"
+        ],
+        "tvTypes": [
+            "Live"
+        ],
+        "version": 1,
+        "internalName": "ReiDosEmbeds",
+        "jarUrl": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/ReiDosEmbeds.jar",
+        "description": "Rei dos Embeds - O melhor diret\u00f3rio de canais ao vivo. Mais de 150 canais dispon\u00edveis.",
+        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/ReiDosEmbeds.cs3",
+        "name": "ReiDosEmbeds",
+        "jarHash": "sha256-ca176a1838be80b681167aa67e5aed27160708b7edf864a645945e46dcc3cc69"
     }
 ]
