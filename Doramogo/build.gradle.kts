@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-   buildFeatures {
+    buildFeatures {
         buildConfig = true
     }
     namespace = "com.Doramogo"
@@ -60,7 +60,7 @@ fun getLocalProperty(key: String): String? {
 }
 
 cloudstream {
-    version = 1
+    version = 3
     description = "Site de Doramas online"
     language = "pt-br"
     authors = listOf("lawlietbr")
