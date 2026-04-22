@@ -67,7 +67,6 @@ cloudstream {
     status = 1
     tvTypes = listOf("AsianDrama")
     iconUrl = "https://www.doramogo.net/assets/doramogo/images/apple-touch-icon.webp?version=200.50.10"
-    isCrossPlatform = true
     requiresResources = true
 }
 
