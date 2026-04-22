@@ -7,5 +7,4 @@ cloudstream {
     status = 1
     tvTypes = listOf("Animes")
     iconUrl = "https://www.anitube.news/wp-content/uploads/cropped-Favicon6-192x192.png"
-    isCrossPlatform = true
 }
