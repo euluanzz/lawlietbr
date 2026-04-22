@@ -7,5 +7,4 @@ cloudstream {
     status = 1
     tvTypes = listOf("Live")
     iconUrl = "https://embedtv.best/assets/icon.png"
-    isCrossPlatform = true
 }
