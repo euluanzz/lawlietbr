@@ -1,7 +1,6 @@
 import java.util.Properties
 
 plugins {
-    kotlin("android")
     id("com.android.library")
 }
 
@@ -14,7 +13,6 @@ android {
 
     defaultConfig {
         minSdk = 24
-        targetSdk = 33
 
         val tmdbApiKey = project.findProperty("TMDB_API_KEY") as? String
             ?: System.getenv("TMDB_API_KEY")
@@ -29,34 +27,15 @@ android {
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "TMDB_ACCESS_TOKEN", "\"$tmdbAccessToken\"")
     }
-
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
 }
 
 fun getLocalProperty(key: String): String? {
     val localProperties = Properties()
     val localPropertiesFile = project.rootProject.file("local.properties")
-
     return if (localPropertiesFile.exists()) {
         localProperties.load(localPropertiesFile.inputStream())
         localProperties.getProperty(key)
-    } else {
-        null
-    }
+    } else null
 }
 
 cloudstream {
@@ -67,7 +46,6 @@ cloudstream {
     status = 1
     tvTypes = listOf("AsianDrama")
     iconUrl = "https://www.doramogo.net/assets/doramogo/images/apple-touch-icon.webp?version=200.50.10"
-    requiresResources = true
 }
 
 dependencies {
