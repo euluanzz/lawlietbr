@@ -68,5 +68,4 @@ cloudstream {
     status = 1
     tvTypes = listOf("Animes")
     iconUrl = "https://animefire.io/img/icons/favicon-192x192.png"
-    isCrossPlatform = true
 }
