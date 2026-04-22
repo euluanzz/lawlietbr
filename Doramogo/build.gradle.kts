@@ -60,7 +60,7 @@ fun getLocalProperty(key: String): String? {
 }
 
 cloudstream {
-    version = 3
+    version = 2
     description = "Site de Doramas online"
     language = "pt-br"
     authors = listOf("lawlietbr")
