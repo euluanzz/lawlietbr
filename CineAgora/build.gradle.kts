@@ -67,7 +67,6 @@ cloudstream {
     status = 1
     tvTypes = listOf("Movies", "Series", "Animes")
     iconUrl = "https://cineagora.net/templates/cineagora/images/touch-icon-180x180.png"
-    isCrossPlatform = true
     requiresResources = true
 }
 
