@@ -67,7 +67,6 @@ cloudstream {
     status = 1
     tvTypes = listOf("Movies", "Series", "Animes")
     iconUrl = "https://mendigoflix.lol/assets/favicon.png"
-    isCrossPlatform = true
     requiresResources = true
 }
 
