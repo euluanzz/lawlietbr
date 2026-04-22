@@ -7,5 +7,4 @@ cloudstream {
     status = 1
     tvTypes = listOf("Anime, AsianDrama")
     iconUrl = "https://www.dattebayo-br.com/favicon.png"
-    isCrossPlatform = true
 }
