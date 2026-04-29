@@ -20,7 +20,7 @@ class PobreFlixProvider : Plugin() {
 
 class PobreFlix : MainAPI() {
     override var mainUrl = "https://lospobreflix.site"
-    override var name = "PobreFlix"
+    override var name = "PobreFlix "
     override val hasMainPage = true
     override var lang = "pt-br"
     override val hasDownloadSupport = true
