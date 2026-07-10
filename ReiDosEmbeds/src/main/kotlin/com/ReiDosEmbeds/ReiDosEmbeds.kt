@@ -192,7 +192,7 @@ class ReiDosEmbeds : MainAPI() {
                 playerUrl,
                 headers = mapOf(
                     "Referer" to playerUrl,
-                    "Origin" to "https://rde.buzz",
+                    "Origin" to "https://v2.rde.lat",
                     "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
                 )
             ).forEach(callback)
