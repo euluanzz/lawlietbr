@@ -226,9 +226,48 @@ class DattebayoBR : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         if (query.length < 2) return emptyList()
-        val searchUrl = "$mainUrl/busca?busca=${query.replace(" ", "+")}"
-        val document = app.get(searchUrl).document
-        return document.select(HOME_ITEM).mapNotNull { it.toSearchResponse() }
+        
+        val formattedQuery = query.replace(" ", "+")
+        val searchUrl = "$mainUrl/busca?busca=$formattedQuery"
+        
+        val document = try {
+            app.get(searchUrl).document
+        } catch (e: Exception) {
+            return emptyList()
+        }
+
+        val searchResults = mutableListOf<SearchResponse>()
+        
+        // 1. Extrai os resultados da Primeira Página
+        searchResults.addAll(document.select(HOME_ITEM).mapNotNull { it.toSearchResponse() })
+        
+        // 2. Descobre a última página analisando as URLs (à prova de mudanças de layout)
+        val lastPage = document.select("a[href]")
+            .mapNotNull { link ->
+                "(?:/page/|[?&]page=)(\\d+)".toRegex()
+                    .find(link.attr("href"))?.groupValues?.get(1)?.toIntOrNull()
+            }
+            .maxOrNull() ?: 1
+
+        // 3. Se houver mais de 1 página, busca o resto de forma paralela (amap)
+        if (lastPage > 1) {
+            // CORREÇÃO AQUI: URL formatada exatamente como no HTML do site (&page=X)
+            val pageUrls = (2..lastPage).map { "$mainUrl/busca?busca=$formattedQuery&page=$it" }
+            
+            val additionalResults = pageUrls.amap { pageUrl ->
+                try {
+                    val pageDoc = app.get(pageUrl).document
+                    pageDoc.select(HOME_ITEM).mapNotNull { it.toSearchResponse() }
+                } catch (e: Exception) {
+                    emptyList<SearchResponse>() // Ignora erros individuais de página
+                }
+            }.flatten() // Achata todas as listas em uma só
+            
+            searchResults.addAll(additionalResults)
+        }
+        
+        // 4. Retorna removendo possíveis itens duplicados
+        return searchResults.distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -268,28 +307,66 @@ class DattebayoBR : MainAPI() {
             ShowStatus.Ongoing
         }
 
+        // --- INÍCIO DA CORREÇÃO DE PAGINAÇÃO ---
         val episodes = mutableListOf<Episode>()
-        
-        document.select(EPISODE_CONTAINER).select(EPISODE_ITEM).forEachIndexed { index, element ->
-            val link = element.selectFirst(EPISODE_LINK) ?: return@forEachIndexed
-            val episodeUrl = fixUrl(link.attr("href"))
-            val episodeTitle = link.attr(EPISODE_TITLE_ATTR).takeIf { it.isNotBlank() } 
-                ?: element.selectFirst(HOME_TITLE)?.text()?.trim() ?: return@forEachIndexed
-            
-            val episodeNumber = extractEpisodeNumber(episodeTitle) ?: (index + 1)
-            val episodePoster = element.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
 
-            episodes.add(
-                newEpisode(episodeUrl) {
-                    name = if (tvType == TvType.AnimeMovie) "Filme" 
-                           else "Episódio $episodeNumber"
-                    episode = episodeNumber
-                    posterUrl = episodePoster ?: poster
-                }
-            )
+        // Função isolada para ler os episódios de qualquer Document (página 1, 2, 3...)
+        fun parseEpisodesFromDoc(doc: Document): List<Episode> {
+            val pageEps = mutableListOf<Episode>()
+            doc.select(EPISODE_CONTAINER).select(EPISODE_ITEM).forEach { element ->
+                val link = element.selectFirst(EPISODE_LINK) ?: return@forEach
+                val episodeUrl = fixUrl(link.attr("href"))
+                val episodeTitle = link.attr(EPISODE_TITLE_ATTR).takeIf { it.isNotBlank() } 
+                    ?: element.selectFirst(HOME_TITLE)?.text()?.trim() ?: return@forEach
+                
+                // Extrai o número real do episódio do título
+                val episodeNumber = extractEpisodeNumber(episodeTitle)
+                val episodePoster = element.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
+
+                pageEps.add(
+                    newEpisode(episodeUrl) {
+                        name = if (tvType == TvType.AnimeMovie) "Filme" 
+                               else if (episodeNumber != null) "Episódio $episodeNumber" 
+                               else episodeTitle
+                        episode = episodeNumber
+                        posterUrl = episodePoster ?: poster
+                    }
+                )
+            }
+            return pageEps
         }
 
+        // 1. Extrai os episódios da Primeira Página
+        episodes.addAll(parseEpisodesFromDoc(document))
+
+        // 2. Descobre a última página analisando as URLs (à prova de mudanças de layout)
+        val lastPage = document.select("a[href]")
+            .mapNotNull { link ->
+                "(?:/page/|[?&]page=)(\\d+)".toRegex()
+                    .find(link.attr("href"))?.groupValues?.get(1)?.toIntOrNull()
+            }
+            .maxOrNull() ?: 1
+
+        // 3. Se houver mais de 1 página, busca o resto de forma paralela (amap)
+        if (lastPage > 1) {
+            val pageUrls = (2..lastPage).map { "${actualUrl.removeSuffix("/")}/page/$it" }
+            
+            val additionalEpisodes = pageUrls.amap { pageUrl ->
+                try {
+                    val pageDoc = app.get(pageUrl).document
+                    parseEpisodesFromDoc(pageDoc)
+                } catch (e: Exception) {
+                    emptyList<Episode>() // Se uma página falhar, não quebra tudo
+                }
+            }.flatten() // Achata as listas de cada página em uma lista única
+            
+            episodes.addAll(additionalEpisodes)
+        }
+
+        // 4. Ordena tudo pelo número do episódio, garantindo a ordem cronológica
+        // Isso é fundamental porque requisições assíncronas podem retornar fora de ordem
         episodes.sortBy { it.episode }
+        // --- FIM DA CORREÇÃO ---
 
         return newAnimeLoadResponse(cleanTitle(title), actualUrl, tvType) {
             this.posterUrl = poster

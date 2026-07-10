@@ -16,7 +16,7 @@
         "version": 2,
         "internalName": "AnimeFire",
         "description": "Site brasileiro de animes em portugu\u00eas",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AnimeFire.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/AnimeFire.cs3",
         "name": "AnimeFire"
     },
     {
@@ -36,15 +36,15 @@
         "version": 2,
         "internalName": "AniTube",
         "description": "AniTube \u00e9 um site para assistir seus animes favoritos online e de onde quiser, temos uma lista completa com diversos animes recentes e antigos para voc\u00ea explorar e o melhor disso tudo \u00e9 a qualidade do nosso site que o diferencia de outros.",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AniTube.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/AniTube.cs3",
         "name": "AniTube"
     },
     {
         "iconUrl": "https://cineagora.net/templates/cineagora/images/touch-icon-180x180.png",
-        "fileHash": "sha256-5e4b45ed3d8375f31cda3db5bb15df72d89dba154e7ab2bacc863a6d4944c956",
+        "fileHash": "sha256-cc2ec5ee9f41aa2f9850d958953f3455d87a58e8b0ca43b15df92f84ef5af4a1",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 65434,
+        "fileSize": 66356,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -58,15 +58,15 @@
         "version": 1,
         "internalName": "CineAgora",
         "description": "Assista filmes e s\u00e9ries online gr\u00e1tis em HD no CineAgora",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/CineAgora.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/CineAgora.cs3",
         "name": "CineAgora"
     },
     {
         "iconUrl": "https://www.dattebayo-br.com/favicon.png",
-        "fileHash": "sha256-296bd7bef7251bdd35e1510fec4ad49416ad820ce4c8eda28cc17087db847096",
+        "fileHash": "sha256-1494eee14531a69087839019ee25a4a4e3f5d27393b5ec2b6f216d6a96282b5c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 25805,
+        "fileSize": 29424,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -78,15 +78,15 @@
         "version": 1,
         "internalName": "DattebayoBR",
         "description": "DattebayoBR Animes Online",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/DattebayoBR.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/DattebayoBR.cs3",
         "name": "DattebayoBR"
     },
     {
         "iconUrl": "https://www.doramogo.net/assets/doramogo/images/apple-touch-icon.webp?version=200.50.10",
-        "fileHash": "sha256-e3903c01899d23e2909223abacd11dd87cd9f387ec4b1786854d84659f8c715d",
+        "fileHash": "sha256-99237d88d844b9a8ce80066962d04fbd592258ea8dbdae50c5f1f1b2471b7d77",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 57401,
+        "fileSize": 57358,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -98,7 +98,7 @@
         "version": 2,
         "internalName": "Doramogo",
         "description": "Site de Doramas online",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Doramogo.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/Doramogo.cs3",
         "name": "Doramogo"
     },
     {
@@ -118,7 +118,7 @@
         "version": 3,
         "internalName": "EmbedTV",
         "description": "Embed TV - O melhor site de TV online. ",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/EmbedTV.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/EmbedTV.cs3",
         "name": "EmbedTV"
     },
     {
@@ -138,15 +138,15 @@
         "version": 2,
         "internalName": "Goyabu",
         "description": "Animes Online em HD gratuitamente no Goyabu",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/Goyabu.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/Goyabu.cs3",
         "name": "Goyabu"
     },
     {
         "iconUrl": "https://mendigoflix.lol/assets/favicon.png",
-        "fileHash": "sha256-d671e96c977a63caf562e49090d44ae726f35afd7bb7b3403bdec2adde05c99e",
+        "fileHash": "sha256-c599cbf9c246b8781be733eb84df3051cd70e8b966e959f4dbab1720d909c934",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 54401,
+        "fileSize": 54361,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -160,7 +160,7 @@
         "version": 3,
         "internalName": "MendigoFlix",
         "description": "MendigoFlix - Filmes e S\u00e9ries em Portugu\u00eas",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/MendigoFlix.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/MendigoFlix.cs3",
         "name": "MendigoFlix"
     },
     {
@@ -183,7 +183,7 @@
         "version": 3,
         "internalName": "PobreFlix",
         "description": "PobreFlix, assistir online, filmes, s\u00e9ries, animes, doramas",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/PobreFlix.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/PobreFlix.cs3",
         "name": "PobreFlix"
     },
     {
@@ -203,15 +203,15 @@
         "version": 1,
         "internalName": "ReiDosEmbeds",
         "description": "Rei dos Embeds - O melhor diret\u00f3rio de canais ao vivo. Mais de 150 canais dispon\u00edveis.",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/ReiDosEmbeds.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/ReiDosEmbeds.cs3",
         "name": "ReiDosEmbeds"
     },
     {
         "iconUrl": "https://openclipart.org/image/2400px/svg_to_png/193323/-S.png",
-        "fileHash": "sha256-70febd32e0a6e0579462342685aee5f6bd6aae14883e3ef78c19fe4d601ad4f4",
+        "fileHash": "sha256-73401790506d47677e965160cb7e9f1f0d8075fd6228a4ab4436ea2cfe1e5c4c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 52928,
+        "fileSize": 52909,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -224,7 +224,7 @@
         "version": 1,
         "internalName": "StreamFlix",
         "description": "StreamFlix - Filmes e S\u00e9ries Online em Portugu\u00eas | Lan\u00e7amentos e Cl\u00e1ssicos",
-        "url": "https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/StreamFlix.cs3",
+        "url": "https://github.com/guilhermehanti/lietrepo/raw/refs/heads/main/builds/StreamFlix.cs3",
         "name": "StreamFlix"
     }
 ]
