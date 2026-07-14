@@ -4,6 +4,9 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import org.json.JSONArray
 
@@ -28,7 +31,63 @@ class ReiDosEmbeds : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val categories = mutableListOf<HomePageList>()
-        
+
+        // 1. Scraping da Agenda (nova feature)
+        try {
+            val agendaDoc = app.get("https://reidosembeds.com/agenda").document
+            val agendaEvents = mutableListOf<SearchResponse>()
+            val eventCards = agendaDoc.select("article[data-event-card]")
+            
+            for (card in eventCards) {
+                val statusBadge = card.select("div.absolute.right-2.top-2").text().trim()
+                
+                // Filtrar apenas Ao Vivo e Em Breve
+                if (statusBadge.equals("AO VIVO", ignoreCase = true) || statusBadge.equals("EM BREVE", ignoreCase = true)) {
+                    val title = card.select("h3").text().trim()
+                    val posterUrl = card.select("img").firstOrNull()?.attr("src") ?: ""
+                    val mainUrl = card.select("a[href^=http]").firstOrNull()?.attr("href") ?: ""
+                    
+                    val optionsArray = JSONArray()
+                    val optionLinks = card.select("div[data-event-options-menu] a")
+                    
+                    for (opt in optionLinks) {
+                        val optName = opt.select("span.truncate").text().trim().ifEmpty {
+                            opt.attr("title").replace("Abrir ", "").trim()
+                        }
+                        val optUrl = opt.attr("href")
+                        
+                        if (optName.isNotEmpty() && optUrl.isNotEmpty()) {
+                            val optObj = JSONObject()
+                            optObj.put("name", optName)
+                            optObj.put("url", optUrl)
+                            optionsArray.put(optObj)
+                        }
+                    }
+
+                    // Montamos os dados num JSON que será passado como URL
+                    val eventData = JSONObject()
+                    eventData.put("is_agenda", true)
+                    eventData.put("title", title)
+                    eventData.put("poster", posterUrl)
+                    eventData.put("url", mainUrl)
+                    eventData.put("options", optionsArray)
+
+                    agendaEvents.add(
+                        newLiveSearchResponse(title, eventData.toString(), TvType.Live) {
+                            this.posterUrl = posterUrl
+                        }
+                    )
+                }
+            }
+
+            if (agendaEvents.isNotEmpty()) {
+                categories.add(HomePageList("Agenda (Ao Vivo e Em Breve)", agendaEvents, isHorizontalImages = true))
+            }
+        } catch (e: Exception) {
+            // Se falhar o load da agenda, ignorar para não quebrar o load dos canais padrões da home
+        }
+
+        // 2. Fetch de Categorias (codigo existente)
         val categoriesResponse = app.get("$apiUrl/channels/categories").text
         val categoriesJson = JSONObject(categoriesResponse)
         val categoriesArray = categoriesJson.getJSONArray("data")
@@ -70,6 +129,7 @@ class ReiDosEmbeds : MainAPI() {
             }
         }
         
+        // 3. Fetch de Todos os Canais (codigo existente)
         val allChannelsResponse = app.get("$apiUrl/channels").text
         val allChannelsJson = JSONObject(allChannelsResponse)
         val allChannelsArray = allChannelsJson.getJSONArray("data")
@@ -93,12 +153,27 @@ class ReiDosEmbeds : MainAPI() {
                 }
             )
         }
+        
         categories.add(0, HomePageList("Todos", allChannels, isHorizontalImages = true))
         
         return newHomePageResponse(categories, hasNext = false)
     }
 
     override suspend fun load(url: String): LoadResponse {
+        // Detecta se a URL foi gerada pelo layout da Agenda JSON
+        if (url.startsWith("{")) {
+            val json = JSONObject(url)
+            val title = json.getString("title")
+            val posterUrl = json.optString("poster", "")
+            val plot = "Assista $title ao vivo!"
+            
+            return newMovieLoadResponse(title, url, TvType.Live, url) {
+                this.posterUrl = posterUrl
+                this.plot = plot
+            }
+        }
+
+        // Lógica padrao existente para canais unicos
         val slug = url.substringAfterLast("/")
         val channelData = channelsCache[slug]
         val title = channelData?.first ?: slug.replace("-", " ").split(" ").joinToString(" ") { word ->
@@ -169,6 +244,63 @@ class ReiDosEmbeds : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        // Se formos acionados via evento da Agenda (múltiplas opções mapeadas)
+        if (data.startsWith("{")) {
+            val json = JSONObject(data)
+            if (json.optBoolean("is_agenda")) {
+                val options = json.getJSONArray("options")
+                val optionPairs = mutableListOf<Pair<String, String>>()
+                for (i in 0 until options.length()) {
+                    val opt = options.getJSONObject(i)
+                    optionPairs.add(Pair(opt.getString("name"), opt.getString("url")))
+                }
+
+                // Dispara os requests em paralelo para extrair as m3u8 de forma super-rapida 
+                coroutineScope {
+                    optionPairs.map { (optName, optUrl) ->
+                        async {
+                            try {
+                                val channelHtml = app.get(optUrl).text
+                                val iframePattern = Regex("""<iframe[^>]*src="([^"]*__play[^"]*)"[^>]*>""")
+                                val iframeMatch = iframePattern.find(channelHtml)
+
+                                if (iframeMatch != null) {
+                                    val playerUrl = iframeMatch.groupValues[1].replace("&amp;", "&")
+                                    val playerHtml = app.get(playerUrl, headers = mapOf("Referer" to optUrl)).text
+                                    val sourcesPattern = Regex("""var sources\s*=\s*(\[.*?\]);""", RegexOption.DOT_MATCHES_ALL)
+                                    val sourcesMatch = sourcesPattern.find(playerHtml)
+
+                                    if (sourcesMatch != null) {
+                                        val sourcesArray = JSONArray(sourcesMatch.groupValues[1])
+                                        for (i in 0 until sourcesArray.length()) {
+                                            val source = sourcesArray.getJSONObject(i)
+                                            val streamUrl = source.getString("src").replace("\\/", "/")
+                                            val label = source.optString("label", "Source ${i + 1}")
+
+                                            M3u8Helper.generateM3u8(
+                                                "$optName - $label",
+                                                streamUrl,
+                                                playerUrl,
+                                                headers = mapOf(
+                                                    "Referer" to playerUrl,
+                                                    "Origin" to "https://v2.rde.lat",
+                                                    "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+                                                )
+                                            ).forEach(callback)
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                // Ignora caso de erro na extração de uma opção específica para nao crashar as outras
+                            }
+                        }
+                    }.awaitAll()
+                }
+                return true
+            }
+        }
+
+        // Lógica original padrao de extração individual
         val channelHtml = app.get(data).text
         val iframePattern = Regex("""<iframe[^>]*src="([^"]*__play[^"]*)"[^>]*>""")
         val iframeMatch = iframePattern.find(channelHtml) ?: return false

@@ -5,7 +5,6 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-import java.io.ByteArrayOutputStream
 
 @CloudstreamPlugin
 class EmbedTvProvider : BasePlugin() {
@@ -22,8 +21,9 @@ class EmbedTv : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Live)
 
-    private val mainSite = "https://embedtv.cv"
-    private val baseUrl = "https://www4.embedtv.cv"
+    private val mainSite = "https://embedtv.lat"
+    private val baseUrl = "https://ww4.embedtv.lat"
+  
     private val blockedChannels = listOf("sexyhot", "playboy")
 
     private fun fixImageUrl(url: String): String {
@@ -56,6 +56,7 @@ class EmbedTv : MainAPI() {
                 val imgElement = card.selectFirst("img")
                 val imageUrl = imgElement?.attr("data-src")?.ifEmpty { imgElement.attr("src") } ?: continue
                 val time = card.selectFirst("span")?.text()?.trim() ?: ""
+            
                 val displayName = if (time.isNotBlank()) "$gameName ($time)" else gameName
                 val jogoUrl = "$baseUrl/$channelId?source=jogos"
 
@@ -133,14 +134,14 @@ class EmbedTv : MainAPI() {
                 TvType.Live,
                 cleanUrl
             ) {
-                this.posterUrl = "https://embedtv.best/assets/icon.png"
+                this.posterUrl = "https://embedtv.lat/assets/icon.png"
             }
         }
 
         val realChannelName = channelCard.selectFirst("h3")?.text()?.trim() ?: "Canal $channelId"
 
         val channelImg = channelCard.selectFirst("img")
-        val defaultImage = channelImg?.attr("data-src")?.ifEmpty { channelImg.attr("src") } ?: "https://embedtv.best/assets/icon.png"
+        val defaultImage = channelImg?.attr("data-src")?.ifEmpty { channelImg.attr("src") } ?: "https://embedtv.lat/assets/icon.png"
 
         val displayImage = if (isFromJogos) {
             val gameCard = mainPage.selectFirst(".session.futebol .card[data-channel=\"$channelId\"]")
@@ -231,49 +232,35 @@ class EmbedTv : MainAPI() {
             val headers = mapOf(
                 "Referer" to baseUrl,
                 "Origin" to baseUrl,
-                "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
 
-            
             val html = app.get(cleanUrl, headers = headers).document
-            
-            
-            val scripts = html.select("script")
             var streamUrl: String? = null
             
-           for (script in scripts) {
-                val scriptContent = script.html()
-                
-                val m3u8Pattern = Regex("""stream:\s*"([^"]+\.m3u8)"""")
-                val m3u8Match = m3u8Pattern.find(scriptContent)
-                if (m3u8Match != null) {
-                    streamUrl = m3u8Match.groupValues[1]
-                    break
-                }
-                
-                val urlPattern = Regex("""https?://[^"'\s]+\.m3u8[^"'\s]*""")
-                val urlMatch = urlPattern.find(scriptContent)
-                if (urlMatch != null) {
-                    streamUrl = urlMatch.value
-                    break
-                }
-                
-                val txtPattern = Regex("""stream:\s*"([^"]+\.txt)"""")
-                val txtMatch = txtPattern.find(scriptContent)
-                if (txtMatch != null) {
-                    streamUrl = txtMatch.groupValues[1]
-                    break
+            val scriptContent = html.html()
+            
+            // Regex nova para buscar tudo que estiver dentro de startPlayer("URL")
+            val startPlayerPattern = Regex("""startPlayer\(\s*["'](https?://[^"']+)["']\s*\)""")
+            val matches = startPlayerPattern.findAll(scriptContent)
+
+            // Varre as correspondências e pega a URL real, ignorando o fallback
+            for (match in matches) {
+                val foundUrl = match.groupValues[1]
+                if (!foundUrl.contains("live-chunks.mediacdn.net")) {
+                    streamUrl = foundUrl
                 }
             }
             
-                 if (streamUrl == null) {
+            // Fallback caso a técnica deles mude e usem tags html
+            if (streamUrl == null) {
                 val dataStreamElement = html.select("[data-stream]").firstOrNull()
                 streamUrl = dataStreamElement?.attr("data-stream")
             }
             
             if (streamUrl != null) {
-                  streamUrl = streamUrl.replace("xn--d1ma04s8hp12.cloudfront.lat", "d1ma04s8hp12.cloudfront.lat")
-                
+                streamUrl = streamUrl!!.replace("xn--d1ma04s8hp12.cloudfront.lat", "d1ma04s8hp12.cloudfront.lat")
+               
                 val streamHeaders = mapOf(
                     "Accept" to "*/*",
                     "Accept-Language" to "pt-BR,pt;q=0.9",
@@ -283,22 +270,24 @@ class EmbedTv : MainAPI() {
                     "Sec-Fetch-Site" to "cross-site",
                     "Referer" to baseUrl,
                     "Origin" to baseUrl,
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 )
                 
-                      if (streamUrl.endsWith(".txt")) {
+                // Se for arquivo .txt (usado pelo P2P media loader deles) ele extrai o m3u8
+                if (streamUrl!!.endsWith(".txt")) {
                     M3u8Helper.generateM3u8(
                         name,
-                        streamUrl,
+                        streamUrl!!,
                         baseUrl,
                         headers = streamHeaders
                     ).forEach(callback)
                 } else {
+                    // Se for direto .m3u8
                     callback.invoke(
                         newExtractorLink(
                             source = name,
                             name = name,
-                            url = streamUrl,
+                            url = streamUrl!!,
                             type = ExtractorLinkType.M3U8
                         ) {
                             this.referer = baseUrl
@@ -311,6 +300,7 @@ class EmbedTv : MainAPI() {
             
             false
         } catch (e: Exception) {
+            e.printStackTrace()
             false
         }
     }

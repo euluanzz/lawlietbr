@@ -7,7 +7,7 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
         classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
     }
 }
@@ -42,7 +42,6 @@ subprojects {
         defaultConfig {
             minSdk = 21
             compileSdkVersion(35)
-            targetSdk = 35
         }
 
         compileOptions {
@@ -56,7 +55,8 @@ subprojects {
                 freeCompilerArgs.addAll(
                     "-Xno-call-assertions",
                     "-Xno-param-assertions",
-                    "-Xno-receiver-assertions"
+                    "-Xno-receiver-assertions",
+                    "-Xskip-metadata-version-check"
                 )
             }
         }
@@ -79,7 +79,7 @@ subprojects {
         implementation("com.google.code.gson:gson:2.11.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
         implementation("app.cash.quickjs:quickjs-android:0.9.2")
-       implementation("com.github.vidstige:jadb:v1.2.1")
+        implementation("com.github.vidstige:jadb:v1.2.1")
     }
 }
 
