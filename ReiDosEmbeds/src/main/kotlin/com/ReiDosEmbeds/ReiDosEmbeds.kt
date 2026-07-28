@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import org.json.JSONObject
 import org.json.JSONArray
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 
 @CloudstreamPlugin
 class ReiDosEmbedsProvider : BasePlugin() {
@@ -26,8 +27,7 @@ private data class TempAgendaEvent(
 )
 
 class ReiDosEmbeds : MainAPI() {
-    // NOME ALTERADO para forçar o Cloudstream a limpar a RAM e criar uma aba nova limpa!
-    override var name = "Rei dos Embeds (Novo)"
+    override var name = "Rei dos Embeds"
     override val hasMainPage = true
     override var lang = "pt-br"
     override val hasDownloadSupport = false
@@ -46,11 +46,14 @@ class ReiDosEmbeds : MainAPI() {
     companion object {
         private var cachedChannelCategories: List<HomePageList>? = null
         private var lastChannelsFetch: Long = 0L
-        private const val CHANNELS_CACHE_MS = 60 * 60 * 1000L // 1 hora
+        private const val CHANNELS_CACHE_MS = 24 * 60 * 60 * 1000L // 24 horas
 
         private var cachedAgenda: HomePageList? = null
         private var lastAgendaFetch: Long = 0L
         private const val AGENDA_CACHE_MS = 15 * 60 * 1000L // 15 minutos
+
+        // Banco de memória para transferir as capas entre as telas
+        private val channelsCacheMap = ConcurrentHashMap<String, Triple<String, String, String>>()
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -134,7 +137,7 @@ class ReiDosEmbeds : MainAPI() {
         cachedAgenda?.let { homeCategories.add(it) }
 
         // ==========================================
-        // 2. LÓGICA DOS CANAIS (HTML Paginação Oficial)
+        // 2. LÓGICA DOS CANAIS
         // ==========================================
         try {
             if (cachedChannelCategories == null || (currentTime - lastChannelsFetch) > CHANNELS_CACHE_MS) {
@@ -144,70 +147,94 @@ class ReiDosEmbeds : MainAPI() {
                 val indexUrl = "$baseUrl/"
                 val doc = app.get(indexUrl, headers = defaultHeaders, cacheTime = 15).document
                 
-                // Mapeia todas as opções do menu dropdown
                 val genreOptions = doc.select("select[name=genre] option").mapNotNull {
                     val value = it.attr("value")
                     val name = it.text().trim()
                     if (value.isNotBlank() && value != "all" && value != "Todas as categorias") Pair(value, name) else null
                 }
 
-                // O amap executa em blocos protegendo contra o Timeout do Cloudstream, enquanto respeita o servidor
-                val chunks = genreOptions.chunked(4)
+                val chunks = genreOptions.chunked(3)
                 for (chunk in chunks) {
                     val chunkResults = chunk.amap { (slug, catName) ->
                         val catChannels = mutableListOf<SearchResponse>()
-                        var currentCatUrl = "$baseUrl/?genre=$slug"
-                        var keepFetchingCat = true
-                        var p = 1
                         
-                        while(keepFetchingCat && p <= 15) { 
-                            try {
-                                val pageDoc = app.get(currentCatUrl, headers = defaultHeaders, cacheTime = 15).document
+                        try {
+                            val firstPageUrl = "$baseUrl/?genre=$slug"
+                            val firstPageDoc = app.get(firstPageUrl, headers = defaultHeaders, cacheTime = 15).document
+                            
+                            fun parseCards(pageDoc: org.jsoup.nodes.Document) {
                                 val cards = pageDoc.select("article[data-channel-card]")
-                                
-                                if (cards.isEmpty()) {
-                                    keepFetchingCat = false
-                                } else {
-                                    for (card in cards) {
-                                        val title = card.selectFirst("h4")?.text()?.trim() ?: continue
-                                        val channelUrl = card.selectFirst("a")?.attr("href") ?: continue
-                                        var posterUrl = card.selectFirst("img")?.attr("src") ?: ""
-                                        if (posterUrl.startsWith("//")) posterUrl = "https:$posterUrl"
-
-                                        catChannels.add(newLiveSearchResponse(title, channelUrl, TvType.Live) {
-                                            this.posterUrl = posterUrl
-                                        })
-                                    }
+                                for (card in cards) {
+                                    val title = card.selectFirst("h4")?.text()?.trim() ?: continue
+                                    val channelUrl = card.selectFirst("a")?.attr("href") ?: continue
                                     
-                                    // A MÁGICA: Extrair exatamente o link "href" oficial do botão Próxima!
-                                    val nextBtn = pageDoc.selectFirst("a.channels-api-page-btn[rel=next]")
-                                    if (nextBtn != null) {
-                                        var nextUrl = nextBtn.attr("href")
-                                        
-                                        // Proteção para garantir que o link extraído seja completo
-                                        if (nextUrl.startsWith("//")) nextUrl = "https:$nextUrl"
-                                        else if (nextUrl.startsWith("/")) nextUrl = "$baseUrl$nextUrl"
-                                        
-                                        currentCatUrl = nextUrl.replace("&amp;", "&")
-                                        p++
-                                    } else {
-                                        keepFetchingCat = false
+                                    // 1. Extrai a imagem do Logo Oficial garantido (Sem bloqueio)
+                                    var logoUrl = card.selectFirst("img")?.attr("src") ?: ""
+                                    if (logoUrl.startsWith("//")) logoUrl = "https:$logoUrl"
+
+                                    // 2. Extrai o fundo Sólido
+                                    var bgUrl = ""
+                                    val bgDiv = card.selectFirst("div[style*='background-image']")
+                                    if (bgDiv != null) {
+                                        val bgMatch = Regex("""url\(['"]?(.*?)['"]?\)""").find(bgDiv.attr("style"))
+                                        if (bgMatch != null) bgUrl = bgMatch.groupValues[1]
                                     }
+                                    if (bgUrl.startsWith("//")) bgUrl = "https:$bgUrl"
+                                    
+                                    // 3. Hack: Usa o proxy oficial do site para burlar o erro 403 do fundo sólido
+                                    val proxiedBgUrl = if (bgUrl.isNotEmpty() && !bgUrl.contains("cloudfront.net")) {
+                                        "https://d1muf25xaso8hp.cloudfront.net/$bgUrl"
+                                    } else {
+                                        bgUrl
+                                    }
+
+                                    // Salva no banco de dados da memória RAM
+                                    val channelSlug = channelUrl.substringAfterLast("/")
+                                    channelsCacheMap[channelSlug] = Triple(title, logoUrl, proxiedBgUrl)
+
+                                    catChannels.add(newLiveSearchResponse(title, channelUrl, TvType.Live) {
+                                        this.posterUrl = logoUrl // Usa o Logo garantido nas listas
+                                    })
                                 }
-                            } catch(e: Exception) {
-                                keepFetchingCat = false
                             }
-                        }
+                            
+                            parseCards(firstPageDoc)
+                            
+                            var maxPage = 1
+                            val pageButtons = firstPageDoc.select("a.channels-api-page-btn, span.channels-api-page-btn")
+                            for (btn in pageButtons) {
+                                val text = btn.text().trim()
+                                val pageNum = text.toIntOrNull()
+                                if (pageNum != null && pageNum > maxPage) {
+                                    maxPage = pageNum
+                                }
+                            }
+                            
+                            if (maxPage > 1) {
+                                for (p in 2..maxPage) {
+                                    try {
+                                        val pUrl = "$baseUrl/?genre=$slug&page=$p"
+                                        val pDoc = app.get(pUrl, headers = defaultHeaders, cacheTime = 15).document
+                                        parseCards(pDoc)
+                                    } catch (e: Exception) {} 
+                                }
+                            }
+                        } catch(e: Exception) {}
+                        
                         Pair(catName, catChannels)
                     }
 
-                    // Processa e mescla os resultados obtidos
                     for ((catName, channels) in chunkResults) {
                         if (channels.isNotEmpty()) {
                             val distinctChannels = channels.distinctBy { it.url }
-                            categoriesList.add(HomePageList(catName, distinctChannels, isHorizontalImages = true))
-                            // Alimenta o pacote da aba Todos
+                            
+                            // Alimenta o pacote da aba "Todos" garantindo que os canais continuem existindo
                             distinctChannels.forEach { allChannelsMap[it.url] = it }
+                            
+                            // Só cria a fileira individual na tela se NÃO for a categoria Adulto
+                            if (!catName.equals("Adulto", ignoreCase = true)) {
+                                categoriesList.add(HomePageList(catName, distinctChannels, isHorizontalImages = true))
+                            }
                         }
                     }
                 }
@@ -244,20 +271,40 @@ class ReiDosEmbeds : MainAPI() {
             
             return newMovieLoadResponse(title, url, TvType.Live, url) {
                 this.posterUrl = posterUrl
+                this.backgroundUrl = posterUrl
                 this.plot = plot
             }
         }
 
-        val doc = app.get(url, headers = defaultHeaders).document
-        val title = doc.selectFirst("title")?.text()?.replace(" - Rei dos Embeds", "")?.trim() ?: "Canal Ao Vivo"
+        // ==========================================
+        // TELA DE DETALHES DO CANAL
+        // ==========================================
+        val slug = url.substringAfterLast("/")
+        var finalTitle = "Canal Ao Vivo"
+        var finalLogo = ""
+        var finalBackground = ""
         
-        // Puxa o Iframe interno diretamente do código do site
+        // Resgata as imagens salvas pela Home
+        val cachedData = channelsCacheMap[slug]
+        if (cachedData != null) {
+            finalTitle = cachedData.first
+            finalLogo = cachedData.second 
+            finalBackground = cachedData.third 
+        }
+
+        val doc = app.get(url, headers = defaultHeaders).document
+        if (cachedData == null) {
+            finalTitle = doc.selectFirst("title")?.text()?.replace(" - Rei dos Embeds", "")?.trim() ?: finalTitle
+        }
+        
         val embedUrl = doc.selectFirst("iframe#play-inner-frame")?.attr("src") 
             ?: doc.selectFirst("iframe")?.attr("src") 
             ?: url 
             
-        return newMovieLoadResponse(title, url, TvType.Live, embedUrl) {
-            this.plot = "Assista $title ao vivo!"
+        return newMovieLoadResponse(finalTitle, url, TvType.Live, embedUrl) {
+            if (finalLogo.isNotEmpty()) this.posterUrl = finalLogo
+            if (finalBackground.isNotEmpty()) this.backgroundUrl = finalBackground
+            this.plot = "Assista $finalTitle ao vivo!"
         }
     }
 
@@ -272,11 +319,29 @@ class ReiDosEmbeds : MainAPI() {
             for (card in cards) {
                 val title = card.selectFirst("h4")?.text()?.trim() ?: continue
                 val channelUrl = card.selectFirst("a")?.attr("href") ?: continue
-                var posterUrl = card.selectFirst("img")?.attr("src") ?: ""
-                if (posterUrl.startsWith("//")) posterUrl = "https:$posterUrl"
+                
+                var logoUrl = card.selectFirst("img")?.attr("src") ?: ""
+                if (logoUrl.startsWith("//")) logoUrl = "https:$logoUrl"
+
+                var bgUrl = ""
+                val bgDiv = card.selectFirst("div[style*='background-image']")
+                if (bgDiv != null) {
+                    val bgMatch = Regex("""url\(['"]?(.*?)['"]?\)""").find(bgDiv.attr("style"))
+                    if (bgMatch != null) bgUrl = bgMatch.groupValues[1]
+                }
+                if (bgUrl.startsWith("//")) bgUrl = "https:$bgUrl"
+                
+                val proxiedBgUrl = if (bgUrl.isNotEmpty() && !bgUrl.contains("cloudfront.net")) {
+                    "https://d1muf25xaso8hp.cloudfront.net/$bgUrl"
+                } else {
+                    bgUrl
+                }
+
+                val slug = channelUrl.substringAfterLast("/")
+                channelsCacheMap[slug] = Triple(title, logoUrl, proxiedBgUrl)
                 
                 results.add(newLiveSearchResponse(title, channelUrl, TvType.Live) { 
-                    this.posterUrl = posterUrl 
+                    this.posterUrl = logoUrl 
                 })
             }
             
