@@ -52,7 +52,6 @@ class ReiDosEmbeds : MainAPI() {
         private var lastAgendaFetch: Long = 0L
         private const val AGENDA_CACHE_MS = 15 * 60 * 1000L // 15 minutos
 
-        // Banco de memória para transferir as capas entre as telas
         private val channelsCacheMap = ConcurrentHashMap<String, Triple<String, String, String>>()
     }
 
@@ -168,11 +167,9 @@ class ReiDosEmbeds : MainAPI() {
                                     val title = card.selectFirst("h4")?.text()?.trim() ?: continue
                                     val channelUrl = card.selectFirst("a")?.attr("href") ?: continue
                                     
-                                    // 1. Extrai a imagem do Logo Oficial garantido (Sem bloqueio)
                                     var logoUrl = card.selectFirst("img")?.attr("src") ?: ""
                                     if (logoUrl.startsWith("//")) logoUrl = "https:$logoUrl"
 
-                                    // 2. Extrai o fundo Sólido
                                     var bgUrl = ""
                                     val bgDiv = card.selectFirst("div[style*='background-image']")
                                     if (bgDiv != null) {
@@ -181,19 +178,20 @@ class ReiDosEmbeds : MainAPI() {
                                     }
                                     if (bgUrl.startsWith("//")) bgUrl = "https:$bgUrl"
                                     
-                                    // 3. Hack: Usa o proxy oficial do site para burlar o erro 403 do fundo sólido
                                     val proxiedBgUrl = if (bgUrl.isNotEmpty() && !bgUrl.contains("cloudfront.net")) {
                                         "https://d1muf25xaso8hp.cloudfront.net/$bgUrl"
                                     } else {
                                         bgUrl
                                     }
 
-                                    // Salva no banco de dados da memória RAM
+                                    // A capa que vai preencher o Carrossel Hero (imagem cheia e sólida)
+                                    val finalPoster = if (proxiedBgUrl.isNotEmpty()) proxiedBgUrl else logoUrl
+
                                     val channelSlug = channelUrl.substringAfterLast("/")
                                     channelsCacheMap[channelSlug] = Triple(title, logoUrl, proxiedBgUrl)
 
                                     catChannels.add(newLiveSearchResponse(title, channelUrl, TvType.Live) {
-                                        this.posterUrl = logoUrl // Usa o Logo garantido nas listas
+                                        this.posterUrl = finalPoster
                                     })
                                 }
                             }
@@ -228,10 +226,8 @@ class ReiDosEmbeds : MainAPI() {
                         if (channels.isNotEmpty()) {
                             val distinctChannels = channels.distinctBy { it.url }
                             
-                            // Alimenta o pacote da aba "Todos" garantindo que os canais continuem existindo
                             distinctChannels.forEach { allChannelsMap[it.url] = it }
                             
-                            // Só cria a fileira individual na tela se NÃO for a categoria Adulto
                             if (!catName.equals("Adulto", ignoreCase = true)) {
                                 categoriesList.add(HomePageList(catName, distinctChannels, isHorizontalImages = true))
                             }
@@ -271,20 +267,17 @@ class ReiDosEmbeds : MainAPI() {
             
             return newMovieLoadResponse(title, url, TvType.Live, url) {
                 this.posterUrl = posterUrl
-                this.backgroundUrl = posterUrl
+                // Corrigido para a propriedade exata do Cloudstream: backgroundPosterUrl
+                this.backgroundPosterUrl = posterUrl
                 this.plot = plot
             }
         }
 
-        // ==========================================
-        // TELA DE DETALHES DO CANAL
-        // ==========================================
         val slug = url.substringAfterLast("/")
         var finalTitle = "Canal Ao Vivo"
         var finalLogo = ""
         var finalBackground = ""
         
-        // Resgata as imagens salvas pela Home
         val cachedData = channelsCacheMap[slug]
         if (cachedData != null) {
             finalTitle = cachedData.first
@@ -303,7 +296,8 @@ class ReiDosEmbeds : MainAPI() {
             
         return newMovieLoadResponse(finalTitle, url, TvType.Live, embedUrl) {
             if (finalLogo.isNotEmpty()) this.posterUrl = finalLogo
-            if (finalBackground.isNotEmpty()) this.backgroundUrl = finalBackground
+            // Corrigido para a propriedade exata do Cloudstream: backgroundPosterUrl
+            if (finalBackground.isNotEmpty()) this.backgroundPosterUrl = finalBackground
             this.plot = "Assista $finalTitle ao vivo!"
         }
     }
@@ -337,11 +331,13 @@ class ReiDosEmbeds : MainAPI() {
                     bgUrl
                 }
 
+                val finalPoster = if (proxiedBgUrl.isNotEmpty()) proxiedBgUrl else logoUrl
+
                 val slug = channelUrl.substringAfterLast("/")
                 channelsCacheMap[slug] = Triple(title, logoUrl, proxiedBgUrl)
                 
                 results.add(newLiveSearchResponse(title, channelUrl, TvType.Live) { 
-                    this.posterUrl = logoUrl 
+                    this.posterUrl = finalPoster 
                 })
             }
             
