@@ -26,6 +26,7 @@ private data class TempAgendaEvent(
 )
 
 class ReiDosEmbeds : MainAPI() {
+    // NOME RESTAURADO para o original a pedido do usuário
     override var name = "Rei dos Embeds"
     override val hasMainPage = true
     override var lang = "pt-br"
@@ -45,7 +46,7 @@ class ReiDosEmbeds : MainAPI() {
     companion object {
         private var cachedChannelCategories: List<HomePageList>? = null
         private var lastChannelsFetch: Long = 0L
-        private const val CHANNELS_CACHE_MS = 24 * 60 * 60 * 1000L // 24 horas
+        private const val CHANNELS_CACHE_MS = 60 * 60 * 1000L // 1 hora de cache
 
         private var cachedAgenda: HomePageList? = null
         private var lastAgendaFetch: Long = 0L
@@ -109,9 +110,7 @@ class ReiDosEmbeds : MainAPI() {
                             }
                             
                             val isLive = statusBadge.equals("AO VIVO", ignoreCase = true)
-                            // URL PAYLOAD: Embutindo as imagens na URL para a tela de Play resgatar
-                            val payloadUrl = "$mainUrl||$posterUrl||$posterUrl"
-                            if (mainUrl.isNotEmpty()) tempAgendaEvents.add(TempAgendaEvent(rawTitle, payloadUrl, posterUrl, isLive, eventTime, sortKey, statusBadge))
+                            if (mainUrl.isNotEmpty()) tempAgendaEvents.add(TempAgendaEvent(rawTitle, mainUrl, posterUrl, isLive, eventTime, sortKey, statusBadge))
                         }
                     }
                     if (!foundValidEventOnPage) keepFetching = false else currentPage++
@@ -135,7 +134,7 @@ class ReiDosEmbeds : MainAPI() {
         cachedAgenda?.let { homeCategories.add(it) }
 
         // ==========================================
-        // 2. LÓGICA DOS CANAIS (Baseada no antigo.txt)
+        // 2. LÓGICA DOS CANAIS (Extração Numérica Exata)
         // ==========================================
         try {
             if (cachedChannelCategories == null || (currentTime - lastChannelsFetch) > CHANNELS_CACHE_MS) {
@@ -145,83 +144,75 @@ class ReiDosEmbeds : MainAPI() {
                 val indexUrl = "$baseUrl/"
                 val doc = app.get(indexUrl, headers = defaultHeaders, cacheTime = 15).document
                 
+                // Mapeia todas as opções do menu dropdown
                 val genreOptions = doc.select("select[name=genre] option").mapNotNull {
                     val value = it.attr("value")
                     val name = it.text().trim()
                     if (value.isNotBlank() && value != "all" && value != "Todas as categorias") Pair(value, name) else null
                 }
 
-                val chunks = genreOptions.chunked(4)
+                // O amap executa em blocos protegendo contra o Timeout do Cloudstream, enquanto respeita o Cloudflare
+                val chunks = genreOptions.chunked(3)
                 for (chunk in chunks) {
                     val chunkResults = chunk.amap { (slug, catName) ->
                         val catChannels = mutableListOf<SearchResponse>()
-                        var currentCatUrl = "$baseUrl/?genre=$slug"
-                        var keepFetchingCat = true
-                        var p = 1
                         
-                        while(keepFetchingCat && p <= 15) { 
-                            try {
-                                val pageDoc = app.get(currentCatUrl, headers = defaultHeaders, cacheTime = 15).document
+                        try {
+                            // Carrega a Página 1 da Categoria
+                            val firstPageUrl = "$baseUrl/?genre=$slug"
+                            val firstPageDoc = app.get(firstPageUrl, headers = defaultHeaders, cacheTime = 15).document
+                            
+                            // Função interna rápida para extrair os cards de uma página do Jsoup
+                            fun parseCards(pageDoc: org.jsoup.nodes.Document) {
                                 val cards = pageDoc.select("article[data-channel-card]")
-                                
-                                if (cards.isEmpty()) {
-                                    keepFetchingCat = false
-                                } else {
-                                    for (card in cards) {
-                                        val title = card.selectFirst("h4")?.text()?.trim() ?: continue
-                                        val channelUrlRaw = card.selectFirst("a")?.attr("href") ?: continue
-                                        
-                                        var logoUrl = card.selectFirst("img")?.attr("src") ?: ""
-                                        if (logoUrl.startsWith("//")) logoUrl = "https:$logoUrl"
+                                for (card in cards) {
+                                    val title = card.selectFirst("h4")?.text()?.trim() ?: continue
+                                    val channelUrl = card.selectFirst("a")?.attr("href") ?: continue
+                                    var posterUrl = card.selectFirst("img")?.attr("src") ?: ""
+                                    if (posterUrl.startsWith("//")) posterUrl = "https:$posterUrl"
 
-                                        var bgUrl = ""
-                                        val bgDiv = card.selectFirst("div[style*='background-image']")
-                                        if (bgDiv != null) {
-                                            val bgMatch = Regex("""url\(['"]?(.*?)['"]?\)""").find(bgDiv.attr("style"))
-                                            if (bgMatch != null) bgUrl = bgMatch.groupValues[1]
-                                        }
-                                        if (bgUrl.startsWith("//")) bgUrl = "https:$bgUrl"
-                                        
-                                        // URL PAYLOAD: Transporta o Link + Logo + Fundo escondidos
-                                        val payloadUrl = "$channelUrlRaw||$logoUrl||$bgUrl"
-
-                                        catChannels.add(newLiveSearchResponse(title, payloadUrl, TvType.Live) {
-                                            // Usa o logoUrl para manter as miniaturas perfeitamente visíveis!
-                                            this.posterUrl = logoUrl
-                                        })
-                                    }
-                                    
-                                    val nextBtn = pageDoc.selectFirst("a.channels-api-page-btn[rel=next]")
-                                    if (nextBtn != null) {
-                                        var nextUrl = nextBtn.attr("href")
-                                        if (nextUrl.startsWith("//")) nextUrl = "https:$nextUrl"
-                                        else if (nextUrl.startsWith("/")) nextUrl = "$baseUrl$nextUrl"
-                                        
-                                        currentCatUrl = nextUrl.replace("&amp;", "&")
-                                        p++
-                                    } else {
-                                        keepFetchingCat = false
-                                    }
+                                    catChannels.add(newLiveSearchResponse(title, channelUrl, TvType.Live) {
+                                        this.posterUrl = posterUrl
+                                    })
                                 }
-                            } catch(e: Exception) {
-                                keepFetchingCat = false
                             }
-                        }
+                            
+                            // Extrai os canais da Página 1
+                            parseCards(firstPageDoc)
+                            
+                            // A MÁGICA NUMÉRICA: Lê todas as tags <a> e <span> da paginação e acha a maior!
+                            var maxPage = 1
+                            val pageButtons = firstPageDoc.select("a.channels-api-page-btn, span.channels-api-page-btn")
+                            for (btn in pageButtons) {
+                                val text = btn.text().trim()
+                                val pageNum = text.toIntOrNull()
+                                if (pageNum != null && pageNum > maxPage) {
+                                    maxPage = pageNum
+                                }
+                            }
+                            
+                            // Se existir página 2, 3, 4..., nós requisitamos elas diretamente!
+                            if (maxPage > 1) {
+                                for (p in 2..maxPage) {
+                                    try {
+                                        val pUrl = "$baseUrl/?genre=$slug&page=$p"
+                                        val pDoc = app.get(pUrl, headers = defaultHeaders, cacheTime = 15).document
+                                        parseCards(pDoc)
+                                    } catch (e: Exception) {} // Ignora página falha e segue em frente
+                                }
+                            }
+                        } catch(e: Exception) {}
+                        
                         Pair(catName, catChannels)
                     }
 
+                    // Processa e mescla os resultados obtidos neste bloco
                     for ((catName, channels) in chunkResults) {
                         if (channels.isNotEmpty()) {
-                            // Limpa duplicatas considerando apenas o link real, ignorando as imagens do payload
-                            val distinctChannels = channels.distinctBy { it.url.split("||")[0] }
-                            
-                            // Adiciona na aba Todos 
-                            distinctChannels.forEach { allChannelsMap[it.url.split("||")[0]] = it }
-                            
-                            // Cria as abas individuais, ESCONDENDO a categoria Adulto
-                            if (!catName.equals("Adulto", ignoreCase = true)) {
-                                categoriesList.add(HomePageList(catName, distinctChannels, isHorizontalImages = true))
-                            }
+                            val distinctChannels = channels.distinctBy { it.url }
+                            categoriesList.add(HomePageList(catName, distinctChannels, isHorizontalImages = true))
+                            // Alimenta o pacote da aba "Todos" simultaneamente
+                            distinctChannels.forEach { allChannelsMap[it.url] = it }
                         }
                     }
                 }
@@ -249,39 +240,31 @@ class ReiDosEmbeds : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        // Desmembra o Payload para recuperar a URL real e as imagens
-        val parts = url.split("||")
-        val realUrl = parts[0]
-        val passedLogo = parts.getOrNull(1) ?: ""
-        val passedBg = parts.getOrNull(2) ?: ""
-
-        if (realUrl.contains("/eventos/")) {
-            val doc = app.get(realUrl, headers = defaultHeaders).document
+        if (url.contains("/eventos/")) {
+            val doc = app.get(url, headers = defaultHeaders).document
             val title = doc.select("h1.event-glow-title").text().trim()
             val plot = doc.select("aside.theme-card p").joinToString("\n") { it.text() }
+            var posterUrl = doc.select(".event-stadium img.event-hero-bg").attr("src")
+            if (posterUrl.startsWith("//")) posterUrl = "https:$posterUrl"
             
-            var pageBg = doc.select(".event-stadium img.event-hero-bg").attr("src") ?: ""
-            if (pageBg.startsWith("//")) pageBg = "https:$pageBg"
-            if (pageBg.isEmpty()) pageBg = passedBg
-            
-            return newMovieLoadResponse(title, realUrl, TvType.Live, realUrl) {
-                this.posterUrl = passedLogo.takeIf { it.isNotEmpty() } ?: pageBg
-                this.backgroundPosterUrl = pageBg.takeIf { it.isNotEmpty() } ?: passedBg.takeIf { it.isNotEmpty() }
+            return newMovieLoadResponse(title, url, TvType.Live, url) {
+                this.posterUrl = posterUrl
                 this.plot = plot
             }
         }
 
-        val doc = app.get(realUrl, headers = defaultHeaders).document
+        // ==========================================
+        // LÓGICA DE CANAIS AO DAR PLAY (Via HTML)
+        // ==========================================
+        val doc = app.get(url, headers = defaultHeaders).document
         val title = doc.selectFirst("title")?.text()?.replace(" - Rei dos Embeds", "")?.trim() ?: "Canal Ao Vivo"
         
+        // Extrai o embed oficial que fica oculto na tag iframe 
         val embedUrl = doc.selectFirst("iframe#play-inner-frame")?.attr("src") 
             ?: doc.selectFirst("iframe")?.attr("src") 
-            ?: realUrl 
+            ?: url 
             
-        return newMovieLoadResponse(title, realUrl, TvType.Live, embedUrl) {
-            // Aplica o fundo e a capa na página de Detalhes!
-            this.posterUrl = passedLogo.takeIf { it.isNotEmpty() }
-            this.backgroundPosterUrl = passedBg.takeIf { it.isNotEmpty() } ?: passedLogo.takeIf { it.isNotEmpty() }
+        return newMovieLoadResponse(title, url, TvType.Live, embedUrl) {
             this.plot = "Assista $title ao vivo!"
         }
     }
@@ -296,23 +279,12 @@ class ReiDosEmbeds : MainAPI() {
             
             for (card in cards) {
                 val title = card.selectFirst("h4")?.text()?.trim() ?: continue
-                val channelUrlRaw = card.selectFirst("a")?.attr("href") ?: continue
+                val channelUrl = card.selectFirst("a")?.attr("href") ?: continue
+                var posterUrl = card.selectFirst("img")?.attr("src") ?: ""
+                if (posterUrl.startsWith("//")) posterUrl = "https:$posterUrl"
                 
-                var logoUrl = card.selectFirst("img")?.attr("src") ?: ""
-                if (logoUrl.startsWith("//")) logoUrl = "https:$logoUrl"
-
-                var bgUrl = ""
-                val bgDiv = card.selectFirst("div[style*='background-image']")
-                if (bgDiv != null) {
-                    val bgMatch = Regex("""url\(['"]?(.*?)['"]?\)""").find(bgDiv.attr("style"))
-                    if (bgMatch != null) bgUrl = bgMatch.groupValues[1]
-                }
-                if (bgUrl.startsWith("//")) bgUrl = "https:$bgUrl"
-                
-                val payloadUrl = "$channelUrlRaw||$logoUrl||$bgUrl"
-                
-                results.add(newLiveSearchResponse(title, payloadUrl, TvType.Live) { 
-                    this.posterUrl = logoUrl 
+                results.add(newLiveSearchResponse(title, channelUrl, TvType.Live) { 
+                    this.posterUrl = posterUrl 
                 })
             }
             
@@ -320,13 +292,11 @@ class ReiDosEmbeds : MainAPI() {
             val eventCards = agendaDoc.select("article[data-event-card]")
             for (card in eventCards) {
                 val title = card.select("h3").text().trim()
-                val mainUrl = card.select("div.flex.gap-2 a[href^=http]").firstOrNull()?.attr("href") ?: ""
+                val url = card.select("div.flex.gap-2 a[href^=http]").firstOrNull()?.attr("href") ?: ""
                 var posterUrl = card.select("img").firstOrNull()?.attr("src") ?: ""
-                if (posterUrl.startsWith("//")) posterUrl = "https:$posterUrl"
                 
-                if (mainUrl.isNotEmpty()) {
-                    val payloadUrl = "$mainUrl||$posterUrl||$posterUrl"
-                    results.add(newLiveSearchResponse(title, payloadUrl, TvType.Live) { 
+                if (url.isNotEmpty()) {
+                    results.add(newLiveSearchResponse(title, url, TvType.Live) { 
                         this.posterUrl = posterUrl 
                     })
                 }
