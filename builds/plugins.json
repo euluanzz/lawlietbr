@@ -63,10 +63,10 @@
     },
     {
         "iconUrl": "https://www.dattebayo-br.com/favicon.png",
-        "fileHash": "sha256-373f81b14d68d41040b30ba3eb17f0e97bc337268a6f49308ae327a8d899a190",
+        "fileHash": "sha256-f61b7f87d6316c35a95f5fc848d67cea7f1cb460dee362c0ae6a5fe1e1e69059",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/lawlietbr/lietrepo",
-        "fileSize": 25611,
+        "fileSize": 26568,
         "status": 1,
         "language": "pt-br",
         "authors": [
