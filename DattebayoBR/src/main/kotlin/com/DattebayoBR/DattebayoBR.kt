@@ -262,7 +262,7 @@ class DattebayoBR : MainAPI() {
                     } catch (e: Exception) {
                         emptyList<SearchResponse>()
                     }
-                }
+                }.flatten() // <-- A CORREÇÃO ENTRA AQUI
             }
             
             searchResults.addAll(additionalResults)
@@ -370,7 +370,7 @@ class DattebayoBR : MainAPI() {
                     } catch (e: Exception) {
                         emptyList<Episode>() 
                     }
-                }
+                }.flatten() // <-- A CORREÇÃO ENTRA AQUI TAMBÉM
             }
             
             episodes.addAll(additionalEpisodes)
