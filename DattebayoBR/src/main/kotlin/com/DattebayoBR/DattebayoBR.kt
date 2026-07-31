@@ -87,7 +87,8 @@ class DattebayoBR : MainAPI() {
     }
 
     private fun extractTotalEpisodes(text: String): Pair<Int?, Int?> {
-        val regex = "(\\d+)/(\\d+)".toRegex()
+        // Aceita tanto dígitos quanto interrogações após a barra (ex: "849/??", "12/12")
+        val regex = "(\\d+)/([\\d\\?]+)".toRegex()
         return regex.find(text)?.let {
             val current = it.groupValues[1].toIntOrNull()
             val total = it.groupValues[2].toIntOrNull()
@@ -249,19 +250,20 @@ class DattebayoBR : MainAPI() {
             }
             .maxOrNull() ?: 1
 
-        // 3. Se houver mais de 1 página, busca o resto de forma paralela (amap)
+        // 3. Se houver mais de 1 página, busca o resto em lotes paralelos (chunked + amap)
         if (lastPage > 1) {
-            // CORREÇÃO AQUI: URL formatada exatamente como no HTML do site (&page=X)
             val pageUrls = (2..lastPage).map { "$mainUrl/busca?busca=$formattedQuery&page=$it" }
             
-            val additionalResults = pageUrls.amap { pageUrl ->
-                try {
-                    val pageDoc = app.get(pageUrl).document
-                    pageDoc.select(HOME_ITEM).mapNotNull { it.toSearchResponse() }
-                } catch (e: Exception) {
-                    emptyList<SearchResponse>() // Ignora erros individuais de página
+            val additionalResults = pageUrls.chunked(5).flatMap { lote ->
+                lote.amap { pageUrl ->
+                    try {
+                        val pageDoc = app.get(pageUrl).document
+                        pageDoc.select(HOME_ITEM).mapNotNull { it.toSearchResponse() }
+                    } catch (e: Exception) {
+                        emptyList<SearchResponse>()
+                    }
                 }
-            }.flatten() // Achata todas as listas em uma só
+            }
             
             searchResults.addAll(additionalResults)
         }
@@ -293,7 +295,8 @@ class DattebayoBR : MainAPI() {
                 text.contains("Ano") -> year = text.substringAfter("Ano").trim().toIntOrNull()
                 text.contains("Episódios") -> {
                     val (current, total) = extractTotalEpisodes(text)
-                    totalEpisodes = total
+                    // Salvamos a quantidade ATUAL de episódios lançados para o cálculo de paginação
+                    totalEpisodes = current 
                 }
                 !isDorama && text.contains("Tipo") && text.contains("Filme", ignoreCase = true) -> {
                     tvType = TvType.AnimeMovie
@@ -307,7 +310,6 @@ class DattebayoBR : MainAPI() {
             ShowStatus.Ongoing
         }
 
-        // --- INÍCIO DA CORREÇÃO DE PAGINAÇÃO ---
         val episodes = mutableListOf<Episode>()
 
         // Função isolada para ler os episódios de qualquer Document (página 1, 2, 3...)
@@ -339,26 +341,37 @@ class DattebayoBR : MainAPI() {
         // 1. Extrai os episódios da Primeira Página
         episodes.addAll(parseEpisodesFromDoc(document))
 
-        // 2. Descobre a última página analisando as URLs (à prova de mudanças de layout)
-        val lastPage = document.select("a[href]")
+        // 2. Descobre a última página: Método Misto (Regex + Matemática)
+        val regexLastPage = document.select("a[href]")
             .mapNotNull { link ->
                 "(?:/page/|[?&]page=)(\\d+)".toRegex()
                     .find(link.attr("href"))?.groupValues?.get(1)?.toIntOrNull()
             }
             .maxOrNull() ?: 1
 
-        // 3. Se houver mais de 1 página, busca o resto de forma paralela (amap)
+        // Calcula com base no total de episódios (assumindo 24 itens por página)
+        val calculatedLastPage = totalEpisodes?.let { total ->
+            kotlin.math.ceil(total.toDouble() / 24.0).toInt()
+        } ?: 1
+
+        // Usa o maior valor encontrado entre a interface e a matemática
+        val lastPage = maxOf(regexLastPage, calculatedLastPage)
+
+        // 3. Se houver mais de 1 página, busca o resto em lotes paralelos (chunked + amap)
         if (lastPage > 1) {
             val pageUrls = (2..lastPage).map { "${actualUrl.removeSuffix("/")}/page/$it" }
             
-            val additionalEpisodes = pageUrls.amap { pageUrl ->
-                try {
-                    val pageDoc = app.get(pageUrl).document
-                    parseEpisodesFromDoc(pageDoc)
-                } catch (e: Exception) {
-                    emptyList<Episode>() // Se uma página falhar, não quebra tudo
+            // Divide as requisições em pacotes de 5 páginas para não derrubar o servidor
+            val additionalEpisodes = pageUrls.chunked(5).flatMap { lote ->
+                lote.amap { pageUrl ->
+                    try {
+                        val pageDoc = app.get(pageUrl).document
+                        parseEpisodesFromDoc(pageDoc)
+                    } catch (e: Exception) {
+                        emptyList<Episode>() 
+                    }
                 }
-            }.flatten() // Achata as listas de cada página em uma lista única
+            }
             
             episodes.addAll(additionalEpisodes)
         }
@@ -366,7 +379,6 @@ class DattebayoBR : MainAPI() {
         // 4. Ordena tudo pelo número do episódio, garantindo a ordem cronológica
         // Isso é fundamental porque requisições assíncronas podem retornar fora de ordem
         episodes.sortBy { it.episode }
-        // --- FIM DA CORREÇÃO ---
 
         return newAnimeLoadResponse(cleanTitle(title), actualUrl, tvType) {
             this.posterUrl = poster
