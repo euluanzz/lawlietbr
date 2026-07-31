@@ -126,7 +126,6 @@ class ReiDosEmbeds : MainAPI() {
                         val fullTitle = "$prefix ${event.title}"
                         newLiveSearchResponse(fullTitle, event.url, TvType.Live) { 
                             this.posterUrl = event.posterUrl
-                            this.posterHeaders = defaultHeaders
                         }
                     }
                     cachedAgenda = HomePageList("Agenda (Ao Vivo e Em Breve)", agendaEvents, isHorizontalImages = true)
@@ -185,7 +184,6 @@ class ReiDosEmbeds : MainAPI() {
 
                                         catChannels.add(newLiveSearchResponse(title, channelUrl, TvType.Live) {
                                             this.posterUrl = posterUrl
-                                            this.posterHeaders = defaultHeaders
                                         })
                                     }
                                     
@@ -236,7 +234,6 @@ class ReiDosEmbeds : MainAPI() {
             val errorMsg = e.message ?: e.toString().take(150)
             val errorItem = newLiveSearchResponse(errorMsg, baseUrl, TvType.Live) {
                 this.posterUrl = "https://via.placeholder.com/300x450.png?text=ERRO+HTML"
-                this.posterHeaders = defaultHeaders
             }
             homeCategories.add(HomePageList("🚨 DEBUG: ERRO HTML", listOf(errorItem), isHorizontalImages = true))
         }
@@ -257,7 +254,6 @@ class ReiDosEmbeds : MainAPI() {
             return newMovieLoadResponse(title, url, TvType.Live, url) {
                 this.posterUrl = posterUrl
                 this.backgroundPosterUrl = posterUrl
-                this.posterHeaders = defaultHeaders
                 this.plot = plot
             }
         }
@@ -277,7 +273,6 @@ class ReiDosEmbeds : MainAPI() {
                 this.posterUrl = cachedPoster
                 this.backgroundPosterUrl = cachedPoster
             }
-            this.posterHeaders = defaultHeaders
             this.plot = "Assista $title ao vivo!"
         }
     }
@@ -302,7 +297,6 @@ class ReiDosEmbeds : MainAPI() {
 
                 results.add(newLiveSearchResponse(title, channelUrl, TvType.Live) { 
                     this.posterUrl = posterUrl 
-                    this.posterHeaders = defaultHeaders
                 })
             }
             
@@ -321,7 +315,6 @@ class ReiDosEmbeds : MainAPI() {
                     
                     results.add(newLiveSearchResponse(title, url, TvType.Live) { 
                         this.posterUrl = posterUrl 
-                        this.posterHeaders = defaultHeaders
                     })
                 }
             }
